@@ -1,0 +1,34 @@
+@model AdminIncidentsModel
+@{ ViewData["Title"] = T["Incident metadata"]; }
+<header class="page-header"><div><h1>@T["Incident metadata"]</h1><p>@T["Reported incidents are unverified. This view excludes medical information and precise locations."]</p></div></header>
+<partial name="_Navigation" />
+<partial name="_Messages" />
+<section class="card">
+    <p class="field-help">@T["Showing the 100 most recent incidents."]</p>
+    @if (Model.Incidents.Count == 0)
+    {
+        <div class="empty-state"><h2>@T["No incidents reported"]</h2><p>@T["Incident metadata appears after someone explicitly reports a possible accident."]</p></div>
+    }
+    else
+    {
+        <div class="table-responsive"><table class="table align-middle">
+            <caption>@T["Incident timestamps and notification counts"] — @T["Athens time"]</caption>
+            <thead><tr><th scope="col">@T["Incident ID"]</th><th scope="col">@T["Reported"]</th><th scope="col">@T["Access expires"]</th><th scope="col">@T["Status"]</th><th scope="col">@T["Location supplied"]</th><th scope="col">@T["Notifications"]</th></tr></thead>
+            <tbody>
+            @foreach (var incident in Model.Incidents)
+            {
+                var expired = incident.ExpiresAt <= DateTimeOffset.UtcNow;
+                <tr>
+                    <td class="small text-break">@incident.Id</td>
+                    <td>@AdminDisplay.LocalTime(incident.ReportedAt)</td>
+                    <td>@AdminDisplay.LocalTime(incident.ExpiresAt)</td>
+                    <td><span class="badge @(incident.IsClosed || expired ? "text-bg-secondary" : "text-bg-warning")">@(incident.IsClosed ? T["Closed"] : expired ? T["Expired"] : T["Open"])</span></td>
+                    <td>@(incident.HasLocation ? T["Yes"] : T["No"])</td>
+                    <td class="small"><div>@T["Queued"]: @incident.QueuedNotifications</div><div>@T["Provider accepted"]: @incident.AcceptedNotifications</div><div>@T["Retries exhausted"]: @incident.ExhaustedNotifications</div></td>
+                </tr>
+            }
+            </tbody>
+        </table></div>
+        <p class="field-help">@T["Provider acceptance does not confirm that an email was delivered or read."]</p>
+    }
+</section>

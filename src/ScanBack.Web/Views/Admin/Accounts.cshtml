@@ -1,0 +1,48 @@
+@model AdminAccountsModel
+@{ ViewData["Title"] = T["Accounts"]; }
+<header class="page-header"><div><h1>@T["Accounts"]</h1><p>@T["Manage account access without opening rider medical profiles."]</p></div></header>
+<partial name="_Navigation" />
+<partial name="_Messages" />
+<section class="card">
+    <form asp-action="Accounts" method="get" class="d-flex flex-wrap gap-2 align-items-end mb-4">
+        <div class="flex-grow-1"><label for="account-search" class="form-label">@T["Search by email or account ID"]</label><input id="account-search" name="search" value="@Model.Search" maxlength="254" class="form-control" type="search" /></div>
+        <button type="submit" class="btn btn-primary">@T["Search"]</button>
+        <a asp-action="Accounts" class="btn btn-outline">@T["Clear"]</a>
+    </form>
+    <p class="field-help">@T["Showing up to 100 accounts. Refine your search to find a specific account."]</p>
+    @if (Model.Accounts.Count == 0)
+    {
+        <div class="empty-state"><h2>@T["No accounts found"]</h2><p>@T["Try another email address or account ID."]</p></div>
+    }
+    else
+    {
+        <div class="table-responsive"><table class="table align-middle">
+            <caption>@T["Account access and email verification status"]</caption>
+            <thead><tr><th scope="col">@T["Account"]</th><th scope="col">@T["Role"]</th><th scope="col">@T["Email verification"]</th><th scope="col">@T["Status"]</th><th scope="col">@T["Action"]</th></tr></thead>
+            <tbody>
+            @foreach (var account in Model.Accounts)
+            {
+                <tr>
+                    <td><strong>@account.Email</strong><div class="small text-muted text-break">@account.Id</div></td>
+                    <td>@(account.IsAdministrator ? T["Administrator"] : T["Rider"]) @if (account.IsCurrentAccount) { <span class="badge text-bg-light">@T["You"]</span> }</td>
+                    <td>@(account.EmailConfirmed ? T["Confirmed"] : T["Unconfirmed"])</td>
+                    <td><span class="badge @(account.IsActive ? "text-bg-success" : "text-bg-secondary")">@(account.IsActive ? T["Active"] : T["Deactivated"])</span></td>
+                    <td>
+                    @if (account.IsCurrentAccount)
+                    {
+                        <span class="field-help">@T["Self-deactivation is blocked"]</span>
+                    }
+                    else
+                    {
+                        <form asp-action="SetAccountStatus" asp-route-id="@account.Id" method="post">
+                            <input type="hidden" name="isActive" value="@((!account.IsActive).ToString().ToLowerInvariant())" />
+                            <button type="submit" class="btn @(account.IsActive ? "btn-outline-danger" : "btn-outline")">@(account.IsActive ? T["Deactivate"] : T["Activate"])</button>
+                        </form>
+                    }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table></div>
+    }
+</section>

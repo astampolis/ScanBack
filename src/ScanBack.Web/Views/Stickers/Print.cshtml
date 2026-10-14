@@ -1,0 +1,12 @@
+@model StickerViewModel
+@{ ViewData["Title"] = T["Print emergency sticker"]; }
+<header class="page-header no-print"><span class="eyebrow">@T["PRINTABLE EMERGENCY ACCESS"]</span><h1>@T["Print emergency sticker"]</h1><p>@T["Use your browser's print command. Keep the white border around the QR code and test the printed sticker with your phone."]</p></header>
+<section class="card print-sticker">
+    <strong class="sticker-brand">SCANBACK</strong>
+    <h2>@T["EMERGENCY ID"]</h2>
+    <img src="/stickers/@Model.Id/qr.png" alt="@T["Emergency profile QR code"]" width="260" height="260" />
+    <p>@T["Scan for emergency information"]</p>
+    <p class="field-help">@Model.Label</p>
+    <strong>112 · 166</strong>
+</section>
+<section class="card no-print"><h2>@T["NFC-compatible emergency URL"]</h2><p class="token-url">@Model.EmergencyUrl</p><p>@T["The QR code and this NFC URL open the same emergency page."]</p>@if (!Model.IsActive) { <div class="alert alert-warning">@T["This sticker is inactive. Activate it before use."]</div> }<a class="btn btn-secondary" href="/stickers/@Model.Id/qr.svg">@T["Download SVG"]</a> <a class="btn btn-link" href="/stickers">@T["Back to stickers"]</a></section>

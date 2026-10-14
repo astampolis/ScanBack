@@ -1,0 +1,42 @@
+@model AdminIdentifiersModel
+@{ ViewData["Title"] = T["Identifiers"]; }
+<header class="page-header"><div><h1>@T["Identifiers"]</h1><p>@T["Review stickers and revoke emergency access when necessary."]</p></div></header>
+<partial name="_Navigation" />
+<partial name="_Messages" />
+<section class="card">
+    <form asp-action="Identifiers" method="get" class="d-flex flex-wrap gap-2 align-items-end mb-4">
+        <div class="flex-grow-1"><label for="identifier-search" class="form-label">@T["Search by sticker label or account ID"]</label><input id="identifier-search" name="search" value="@Model.Search" maxlength="254" class="form-control" type="search" /></div>
+        <button type="submit" class="btn btn-primary">@T["Search"]</button>
+        <a asp-action="Identifiers" class="btn btn-outline">@T["Clear"]</a>
+    </form>
+    <p class="field-help">@T["Showing up to 100 identifiers. Revocation is permanent; the rider can create a replacement."]</p>
+    @if (Model.Identifiers.Count == 0)
+    {
+        <div class="empty-state"><h2>@T["No identifiers found"]</h2><p>@T["Identifiers appear here after a rider creates a sticker."]</p></div>
+    }
+    else
+    {
+        <div class="table-responsive"><table class="table align-middle">
+            <caption>@T["Identifier status and creation times"] — @T["Athens time"]</caption>
+            <thead><tr><th scope="col">@T["Sticker"]</th><th scope="col">@T["Account ID"]</th><th scope="col">@T["Created"]</th><th scope="col">@T["Status"]</th><th scope="col">@T["Action"]</th></tr></thead>
+            <tbody>
+            @foreach (var identifier in Model.Identifiers)
+            {
+                <tr>
+                    <td><strong>@identifier.Label</strong><div class="small text-muted text-break">@identifier.Id</div></td>
+                    <td class="small text-break">@identifier.AccountId</td>
+                    <td>@AdminDisplay.LocalTime(identifier.CreatedAt)</td>
+                    <td><span class="badge @(identifier.IsActive && identifier.RevokedAt is null ? "text-bg-success" : "text-bg-secondary")">@(identifier.RevokedAt is not null ? T["Revoked"] : identifier.IsActive ? T["Active"] : T["Inactive"])</span>
+                    @if (identifier.RevokedAt is DateTimeOffset revokedAt) { <div class="small text-muted">@AdminDisplay.LocalTime(revokedAt)</div> }</td>
+                    <td>
+                    @if (identifier.RevokedAt is null)
+                    {
+                        <form asp-action="RevokeIdentifier" asp-route-id="@identifier.Id" method="post"><button type="submit" class="btn btn-outline-danger">@T["Permanently revoke"]</button></form>
+                    }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table></div>
+    }
+</section>

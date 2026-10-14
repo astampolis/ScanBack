@@ -1,0 +1,3 @@
+Bootstrap 5.3.8
+Source: https://registry.npmjs.org/bootstrap
+Verified integrity: sha512-HP1SZDqaLDPwsNiqRqi5NcP0SSXciX2s9E+RyqJIIqGo+vJeN5AJVM98CXmW/Wux0nQ5L7jeWUdplCEf0Ee+tg==

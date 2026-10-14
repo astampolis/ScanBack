@@ -1,0 +1,3 @@
+@model string
+@{ ViewData["Title"] = T["Account information"]; }
+<section class="auth-shell compact"><div class="card auth-card"><span class="badge">SCANBACK</span><h1>@T["Account information"]</h1><p role="status">@T[Model]</p><a class="btn btn-primary" asp-action="Login">@T["Sign in"]</a><a class="btn btn-outline" asp-action="ResendConfirmation">@T["Resend email confirmation"]</a></div></section>

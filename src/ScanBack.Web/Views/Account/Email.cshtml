@@ -1,0 +1,4 @@
+@model AccountEmailModel
+@{ var isConfirmation = ViewContext.RouteData.Values["action"]?.ToString() == "ResendConfirmation"; var title = isConfirmation ? T["Resend email confirmation"] : T["Reset your password"]; ViewData["Title"] = title; }
+<section class="auth-shell compact"><div class="card auth-card"><h1>@title</h1><p class="text-muted">@T["Enter your account email. We will send a secure link if your account is eligible."]</p>
+<form method="post"><div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div><div class="form-field"><label asp-for="Email">@T["Email address"]</label><input asp-for="Email" autocomplete="email" /><span asp-validation-for="Email"></span></div><button class="btn btn-primary" type="submit">@T["Send email"]</button></form><p><a asp-action="Login">@T["Back to sign in"]</a></p></div></section>

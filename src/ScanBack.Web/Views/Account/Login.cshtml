@@ -1,0 +1,11 @@
+@model LoginModel
+@{ ViewData["Title"] = T["Welcome back"]; }
+<section class="auth-shell"><div class="auth-intro"><span class="eyebrow">SCANBACK</span><h1>@T["Ready for the next ride."]</h1><p>@T["Keep your emergency details current and your trusted contacts close."]</p></div><div class="card auth-card">
+<h2>@T["Welcome back"]</h2><p class="text-muted">@T["Sign in to your rider dashboard."]</p>
+<form asp-action="Login" method="post"><input asp-for="ReturnUrl" type="hidden" />
+<div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
+<div class="form-field"><label asp-for="Email">@T["Email address"]</label><input asp-for="Email" autocomplete="username" /><span asp-validation-for="Email"></span></div>
+<div class="form-field"><label asp-for="Password">@T["Password"]</label><input asp-for="Password" autocomplete="current-password" /><span asp-validation-for="Password"></span></div>
+<div class="form-actions"><label class="check-label"><input asp-for="RememberMe" /> @T["Remember me"]</label><a asp-action="ForgotPassword">@T["Forgot password?"]</a></div>
+<button class="btn btn-primary w-100" type="submit">@T["Sign in"]</button>
+</form><p class="auth-foot">@T["New to ScanBack?"] <a asp-action="Register">@T["Create an account"]</a></p><p class="field-help"><a asp-action="ResendConfirmation">@T["Resend email confirmation"]</a></p></div></section>

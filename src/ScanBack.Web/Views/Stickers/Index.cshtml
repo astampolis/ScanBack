@@ -1,0 +1,40 @@
+@model StickersPageViewModel
+@{ ViewData["Title"] = T["QR & NFC stickers"]; }
+<header class="page-header"><span class="eyebrow">@T["YOUR EMERGENCY LINKS"]</span><h1>@T["QR & NFC stickers"]</h1><p>@T["One secure URL for a printable QR code and an NFC sticker. No medical information is stored in the sticker."]</p></header>
+@if (Model.Error is not null) { <div class="alert alert-warning" role="alert">@T[Model.Error]</div> }
+<section class="card">
+    <h2>@T["Create an emergency sticker"]</h2>
+    <p class="field-help">@T["Use a simple label that can be shown publicly, such as Helmet or Spare helmet. You can create up to 10 stickers."]</p>
+    <form method="post" action="/stickers/create">
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="All" class="validation-summary" role="alert"></div>
+        <div class="form-grid"><div><label asp-for="NewSticker.Label">@T["Sticker label"]</label><input asp-for="NewSticker.Label" maxlength="60" required /></div><div class="form-action"><button type="submit" class="btn btn-primary">@T["Create sticker"]</button></div></div>
+    </form>
+</section>
+@if (Model.Stickers.Count == 0)
+{
+    <section class="card empty-state"><h2>@T["Your first emergency link"]</h2><p>@T["Create a sticker above, download its QR code, and test it with your phone before putting it on your helmet."]</p></section>
+}
+@foreach (var sticker in Model.Stickers)
+{
+    <section class="card sticker-card">
+        <div class="section-heading"><div><h2>@sticker.Label</h2><p class="field-help">@T["Created"] @TimeZoneInfo.ConvertTime(sticker.CreatedAt, TimeZoneInfo.FindSystemTimeZoneById("Europe/Athens")).ToString("dd MMM yyyy")</p></div><span class="badge @(sticker.IsActive ? "badge-success" : "badge-muted")">@T[sticker.IsActive ? "Active" : "Inactive"]</span></div>
+        @if (sticker.EmergencyUrl is not null)
+        {
+            <div class="sticker-content">
+                <img class="qr-preview" src="/stickers/@sticker.Id/qr.png" alt="@T["QR code for this emergency sticker"]" width="180" height="180" loading="lazy" />
+                <div><label for="sticker-url-@sticker.Id">@T["NFC-compatible emergency URL"]</label><input id="sticker-url-@sticker.Id" class="token-url" value="@sticker.EmergencyUrl" readonly /><p class="field-help">@T["Program this URL into the NFC sticker. Anyone with this link can view your selected public emergency information."]</p>
+                <div class="button-row"><a class="btn btn-secondary" href="/stickers/@sticker.Id/qr.svg">@T["Download SVG"]</a><a class="btn btn-secondary" href="/stickers/@sticker.Id/qr.png">@T["Download PNG"]</a><a class="btn btn-secondary" href="/stickers/@sticker.Id/print">@T["Print sticker"]</a><a class="btn btn-link" href="@sticker.EmergencyUrl">@T["Preview emergency page"]</a></div></div>
+            </div>
+        }
+        else
+        {
+            <p class="alert alert-warning">@T["The stored sticker link cannot be recovered. Replace this sticker to create a new secure link."]</p>
+        }
+        <div class="sticker-actions">
+            <form method="post" action="/stickers/@sticker.Id/toggle">@Html.AntiForgeryToken()<button class="btn btn-secondary" type="submit">@T[sticker.IsActive ? "Deactivate sticker" : "Activate sticker"]</button></form>
+            <details><summary>@T["Replace this sticker"]</summary><p>@T["Replacing invalidates the current QR code, NFC URL, and existing incident invitations. You must print the new code and reprogram the NFC sticker."]</p><form method="post" action="/stickers/@sticker.Id/replace">@Html.AntiForgeryToken()<button class="btn btn-danger" type="submit">@T["Replace and invalidate old link"]</button></form></details>
+        </div>
+    </section>
+}
+<p class="field-help">@T["ScanBack does not supply or program physical NFC hardware. Test printed QR codes at their final size and follow helmet manufacturer guidance before attaching a sticker."]</p>

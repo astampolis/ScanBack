@@ -1,0 +1,120 @@
+@{
+    var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+    var signedIn = User.Identity?.IsAuthenticated == true;
+    var isEmergency = controller.Equals("Emergency", StringComparison.OrdinalIgnoreCase)
+        || controller.Equals("Incident", StringComparison.OrdinalIgnoreCase);
+    var isWorkspace = signedIn && !isEmergency && !controller.Equals("Home", StringComparison.OrdinalIgnoreCase)
+        && !controller.Equals("Account", StringComparison.OrdinalIgnoreCase);
+    var returnUrl = Context.Request.Path + Context.Request.QueryString;
+    var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+    string Current(string name, string? selectedAction = null) => controller.Equals(name, StringComparison.OrdinalIgnoreCase)
+        && (selectedAction is null || action.Equals(selectedAction, StringComparison.OrdinalIgnoreCase)) ? " active" : "";
+}
+<!DOCTYPE html>
+<html lang="@(T.IsGreek ? "el" : "en")">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#171d1b" />
+    <meta name="description" content="ScanBack connects motorcycle riders with the people who can help. QR and NFC emergency profiles, with privacy in your hands." />
+    <title>@ViewData["Title"] · ScanBack</title>
+    <link rel="icon" type="image/svg+xml" href="~/favicon.svg" />
+    <link rel="stylesheet" href="~/vendor/bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    @await RenderSectionAsync("Head", required: false)
+</head>
+<body class="@(isWorkspace ? "workspace-layout" : "public-layout") @(isEmergency ? "emergency-layout" : "")">
+    <a href="#main-content" class="skip-link">@T["Skip to content"]</a>
+    <header class="site-header">
+        <a class="brand" href="/" aria-label="ScanBack — @T["Home"]">
+            <span class="brand-symbol" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="m8 12 3 3 5-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <span>Scan<span class="brand-accent">Back</span></span>
+        </a>
+        @if (isWorkspace)
+        {
+            <span class="header-caption">@T["Your ride. Your safety network."]</span>
+        }
+        else if (isEmergency)
+        {
+            <span class="header-caption emergency-header-caption"><span class="status-dot"></span>@T["Emergency access"]</span>
+        }
+        else
+        {
+            <nav class="marketing-nav" aria-label="@T["Main navigation"]">
+                <a href="/#how-it-works">@T["How it works"]</a>
+                <a href="/#privacy-first">@T["Privacy first"]</a>
+            </nav>
+        }
+        <div class="header-actions">
+            <nav class="language-switch" aria-label="@T["Language"]">
+                <a class="@(!T.IsGreek ? "selected" : "")" href="@Url.Action("Language", "Home", new { culture = "en", returnUrl })" lang="en" aria-current="@(!T.IsGreek ? "true" : "false")">EN</a>
+                <a class="@(T.IsGreek ? "selected" : "")" href="@Url.Action("Language", "Home", new { culture = "el", returnUrl })" lang="el" aria-current="@(T.IsGreek ? "true" : "false")">ΕΛ</a>
+            </nav>
+            @if (!isEmergency)
+            {
+                @if (signedIn)
+                {
+                    <a href="/profile" class="btn btn-sm btn-dark header-dashboard">@T["My dashboard"] <svg class="inline-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 15 15 5M5 5h10v10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg></a>
+                    <form class="header-logout" method="post" action="/account/logout">@Html.AntiForgeryToken()<button class="logout-button" type="submit" aria-label="@T["Log out"]" title="@T["Log out"]"><svg width="20" height="20" viewBox="0 0 22 22" fill="none" aria-hidden="true"><path d="M9 3H3v16h6m3-12 4 4-4 4m-4-4h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></form>
+                }
+                else
+                {
+                    <a href="/account/login" class="header-login">@T["Log in"]</a>
+                    <a href="/account/register" class="btn btn-sm btn-dark header-register">@T["Get started"] <svg class="inline-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 15 15 5M5 5h10v10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg></a>
+                }
+            }
+        </div>
+    </header>
+    @if (isWorkspace)
+    {
+        <div class="workspace-shell">
+            <aside class="sidebar">
+                <div class="sidebar-label">@T["RIDER WORKSPACE"]</div>
+                <nav class="sidebar-nav" aria-label="@T["Rider navigation"]">
+                    <a class="@("sidebar-link" + Current("Profile", "Index"))" href="/profile"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="13" y="3" width="6" height="6" rx="1"/><rect x="3" y="13" width="6" height="6" rx="1"/><rect x="13" y="13" width="6" height="6" rx="1"/></svg></span>@T["Overview"]</a>
+                    <a class="@("sidebar-link" + Current("Profile", "Edit"))" href="/profile/edit"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 18 4 11c-5-5 1-12 7-6 6-6 12 1 7 6Z"/></svg></span>@T["Medical profile"]</a>
+                    <a class="@("sidebar-link" + Current("Contacts"))" href="/contacts"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="7" r="3"/><path d="M2 19v-3c0-5 12-5 12 0v3M14 4a3 3 0 0 1 0 6m3 3c3 0 4 2 4 5"/></svg></span>@T["Emergency contacts"]</a>
+                    <a class="@("sidebar-link qr-nav-icon" + Current("Stickers"))" href="/stickers"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="5"/><rect x="14" y="3" width="5" height="5"/><rect x="3" y="14" width="5" height="5"/><path d="M14 14h5v5h-5v-5zm-3-6v4H7m4 7v-3m8-5h-4"/></svg></span>@T["QR & NFC stickers"]</a>
+                    <a class="@("sidebar-link" + Current("Security"))" href="/security"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2 3 5v6c0 6 8 10 8 10s8-4 8-10V5Z"/><path d="m7 11 3 3 5-6"/></svg></span>@T["Account security"]</a>
+                    @if (User.IsInRole("Administrator"))
+                    {
+                        <div class="sidebar-divider"></div>
+                        <a class="@("sidebar-link" + Current("Admin"))" href="/admin"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m8 3 6 0 1 3 3 1 2 5-2 4-3 1-1 3H8l-1-3-3-1-2-4 2-5 3-1Z"/><circle cx="11" cy="11" r="3"/></svg></span>@T["Administration"]</a>
+                    }
+                </nav>
+                <div class="sidebar-safety">
+                    <span class="tiny-label">@T["READY FOR THE ROAD"]</span>
+                    <h2>@T["A little preparation. A stronger safety net."]</h2>
+                    <p>@T["Keep your profile and emergency contacts up to date before your next ride."]</p>
+                    <a href="/profile/edit">@T["Review my profile"] <span aria-hidden="true">→</span></a>
+                </div>
+                <div class="sidebar-account">
+                    <span class="account-avatar" aria-hidden="true">@(User.Identity?.Name?.FirstOrDefault().ToString().ToUpperInvariant() ?? "R")</span>
+                    <div class="account-details"><strong>@T["Rider account"]</strong><span>@User.Identity?.Name</span></div>
+                    <form method="post" action="/account/logout">@Html.AntiForgeryToken()<button class="logout-button" type="submit" aria-label="@T["Log out"]" title="@T["Log out"]"><svg width="19" height="19" viewBox="0 0 22 22" fill="none" aria-hidden="true"><path d="M9 3H3v16h6m3-12 4 4-4 4m-4-4h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></form>
+                </div>
+            </aside>
+            <div class="workspace-content">
+                <main id="main-content" class="workspace-main" tabindex="-1">
+                    @if (TempData["Success"] is string message) { <div class="alert alert-success" role="status">@T[message]</div> }
+                    @if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@T[error]</div> }
+                    @RenderBody()
+                </main>
+                <footer class="site-footer workspace-footer"><span>© @DateTime.UtcNow.Year ScanBack</span><a href="/privacy">@T["Privacy & data"]</a><span class="footer-note">@T["Made for the road ahead."]</span></footer>
+            </div>
+        </div>
+    }
+    else
+    {
+        <main id="main-content" class="@(controller.Equals("Home", StringComparison.OrdinalIgnoreCase) && ViewContext.RouteData.Values["action"]?.ToString() == "Index" ? "home-main" : "public-main")" tabindex="-1">
+            @if (TempData["Success"] is string message) { <div class="alert alert-success" role="status">@T[message]</div> }
+            @if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@T[error]</div> }
+            @RenderBody()
+        </main>
+        <footer class="site-footer"><a class="footer-brand" href="/">ScanBack</a><span>© @DateTime.UtcNow.Year</span><a href="/privacy">@T["Privacy & data"]</a><span class="footer-note">@T["Made for the road ahead."]</span></footer>
+    }
+    <script src="~/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

@@ -1,0 +1,25 @@
+@model AdminAuditModel
+@{ ViewData["Title"] = T["Audit log"]; }
+<header class="page-header"><div><h1>@T["Audit log"]</h1><p>@T["Recent security and administrative actions, with no medical content or credentials."]</p></div></header>
+<partial name="_Navigation" />
+<partial name="_Messages" />
+<section class="card">
+    <p class="field-help">@T["Showing the 100 most recent audit events."]</p>
+    @if (Model.Events.Count == 0)
+    {
+        <div class="empty-state"><h2>@T["No audit events yet"]</h2><p>@T["Audited operations will appear here as the platform is used."]</p></div>
+    }
+    else
+    {
+        <div class="table-responsive"><table class="table align-middle">
+            <caption>@T["Technical audit metadata"] — @T["Athens time"]</caption>
+            <thead><tr><th scope="col">@T["Time"]</th><th scope="col">@T["Action"]</th><th scope="col">@T["Actor account ID"]</th><th scope="col">@T["Entity ID"]</th></tr></thead>
+            <tbody>
+            @foreach (var entry in Model.Events)
+            {
+                <tr><td>@AdminDisplay.LocalTime(entry.CreatedAt)</td><td>@entry.Action</td><td class="small text-break">@(entry.ActorId ?? T["Anonymous / system"])</td><td class="small text-break">@(entry.EntityId ?? "—")</td></tr>
+            }
+            </tbody>
+        </table></div>
+    }
+</section>

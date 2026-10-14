@@ -1,0 +1,45 @@
+@model IncidentPageViewModel
+@{ ViewData["Title"] = T["Incident response"]; var zone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Athens"); var reportTime = TimeZoneInfo.ConvertTime(Model.ReportedAt, zone); var expiryTime = TimeZoneInfo.ConvertTime(Model.ExpiresAt, zone); }
+<header class="page-header"><span class="eyebrow">@T["RESTRICTED INCIDENT PAGE"]</span><h1>@T["Coordinate help"]</h1><p>@Model.Profile.DisplayName · @T["Possible accident, unverified"]</p></header>
+<div class="call-grid"><a href="tel:112" class="btn btn-danger call-button"><strong>112</strong><span>@T["European Emergency Number"]</span></a><a href="tel:166" class="btn btn-danger call-button"><strong>166</strong><span>@T["Ambulance Service · Greece"]</span></a></div>
+<p class="field-help">@T["These buttons open your phone dialer. ScanBack does not call or dispatch emergency services."]</p>
+<section class="card">
+    <h2>@T["Report received"]</h2>
+    <p>@T["This report is unverified. ScanBack has not contacted emergency services."]</p>
+    <dl class="detail-grid"><div><dt>@T["Reported at"]</dt><dd><time datetime="@Model.ReportedAt.ToString("O")">@reportTime.ToString("dd MMM yyyy HH:mm") (Europe/Athens)</time></dd></div><div><dt>@T["Access expires"]</dt><dd><time datetime="@Model.ExpiresAt.ToString("O")">@expiryTime.ToString("dd MMM yyyy HH:mm") (Europe/Athens)</time></dd></div></dl>
+    <h3>@T["Contact notification status"]</h3>
+    @if (Model.QueuedNotifications + Model.AcceptedNotifications + Model.FailedNotifications == 0)
+    {
+        <p>@T["No contact emails were queued. The rider may have no verified enabled contacts, or notifications may be disabled."]</p>
+    }
+    else
+    {
+        <div class="status-grid"><div><strong>@Model.QueuedNotifications</strong><span>@T["Queued / retrying"]</span></div><div><strong>@Model.AcceptedNotifications</strong><span>@T["Accepted by email provider"]</span></div><div><strong>@Model.FailedNotifications</strong><span>@T["Failed"]</span></div></div>
+        <p class="field-help">@T["Provider acceptance does not mean the recipient has received or read the email. Refresh this page to update status."]</p>
+    }
+</section>
+<section class="card" aria-labelledby="location-heading">
+    <h2 id="location-heading">@T["Reported location"]</h2>
+    <p class="field-help">@T["This is one location reported by the assisting person. It is not live tracking and has not been verified."]</p>
+    @if (Model.Latitude is double latitude && Model.Longitude is double longitude)
+    {
+        <p class="coordinates">@latitude.ToString("F6", System.Globalization.CultureInfo.InvariantCulture), @longitude.ToString("F6", System.Globalization.CultureInfo.InvariantCulture)</p>
+        <a class="btn btn-secondary" href="@Model.MapsUrl" target="_blank" rel="noopener noreferrer">@T["Open location in Google Maps"]</a>
+        <p class="field-help">@T["Opening this map shares these coordinates with Google."]</p>
+    }
+    else
+    {
+        <p>@T["GPS location was not shared. Ask the assisting person for nearby landmarks."]</p>
+    }
+    @if (!string.IsNullOrWhiteSpace(Model.LocationDescription)) { <p class="preserve-lines">@Model.LocationDescription</p> }
+</section>
+<section class="card" aria-labelledby="guide-heading">
+    <span class="eyebrow">@T["PREDEFINED COMMUNICATION GUIDE"]</span><h2 id="guide-heading">@T["What to tell the dispatcher"]</h2>
+    <p>@T["Use this script when calling. Confirm the facts you know and follow the dispatcher's questions. This guide does not diagnose injuries."]</p>
+    <blockquote class="communication-script">@Model.CommunicationScript</blockquote>
+    <ul class="safety-list"><li>@T["Contact emergency services immediately."]</li><li>@T["Give the dispatcher the exact location and number of people involved."]</li><li>@T["Follow the dispatcher's instructions."]</li><li>@T["Avoid moving the injured person unless there is immediate danger."]</li><li>@T["Do not remove the helmet without appropriate emergency guidance or training."]</li></ul>
+</section>
+@if (Model.Profile.MedicalFields.Count > 0)
+{
+    <section class="card"><h2>@T["Shared emergency information"]</h2><p class="field-help">@T["Medical details are rider supplied and are not independently verified."]</p><dl class="detail-grid">@foreach (var field in Model.Profile.MedicalFields) { <div><dt>@T[field.Label]</dt><dd class="preserve-lines">@field.Value</dd></div> }</dl></section>
+}

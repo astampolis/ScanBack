@@ -1,0 +1,9 @@
+@model string[]
+@{ ViewData["Title"] = T["Save your recovery codes"]; }
+<div class="page-header"><h1>@T["Save your recovery codes"]</h1></div>
+<section class="card">
+    <p>@T["Two-factor authentication is enabled. Store these codes somewhere safe. Each code can be used once if you lose access to your authenticator."]</p>
+    <ul>@foreach (var code in Model) { <li><code>@code</code></li> }</ul>
+    <p>@T["These codes are displayed once. Sign in again to continue."]</p>
+    <a class="btn btn-primary" href="/account/login">@T["Sign in"]</a>
+</section>

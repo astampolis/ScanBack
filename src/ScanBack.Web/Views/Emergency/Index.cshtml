@@ -1,0 +1,136 @@
+@model EmergencyPageViewModel
+@{
+    ViewData["Title"] = T["Emergency information"];
+}
+<header class="page-header">
+    <span class="eyebrow">@T["SCANBACK EMERGENCY"]</span>
+    <h1>@T["Get help first"]</h1>
+    <p>@T["Call emergency services immediately if someone needs urgent help."]</p>
+</header>
+<div class="call-grid" aria-label="@T["Emergency calling options"]">
+    <a href="tel:112" class="btn btn-danger call-button"><strong>112</strong><span>@T["European Emergency Number"]</span></a>
+    <a href="tel:166" class="btn btn-danger call-button"><strong>166</strong><span>@T["Ambulance Service · Greece"]</span></a>
+</div>
+<p class="field-help">@T["These buttons open your phone dialer. ScanBack does not call or dispatch emergency services."]</p>
+
+<section class="card emergency-card" aria-labelledby="rider-heading">
+    <div class="profile-heading">
+        @if (Model.Profile.PhotoUrl is not null)
+        {
+            <img class="profile-photo" src="@Model.Profile.PhotoUrl" alt="@T["Rider profile photo"]" width="80" height="80" />
+        }
+        <div><span class="eyebrow">@T["RIDER EMERGENCY PROFILE"]</span><h2 id="rider-heading">@Model.Profile.DisplayName</h2>
+        @if (Model.Profile.Age is int age) { <p>@T["Age"]: @age</p> }</div>
+    </div>
+    <p class="field-help">@T["Only information selected by the rider is shown. Medical details are rider supplied and are not independently verified."]</p>
+    @if (Model.Profile.MedicalFields.Count == 0)
+    {
+        <p>@T["No medical information has been shared publicly. This does not mean that the rider has no medical conditions or allergies."]</p>
+    }
+    else
+    {
+        <dl class="detail-grid">
+            @foreach (var field in Model.Profile.MedicalFields)
+            {
+                <div><dt>@T[field.Label]</dt><dd class="preserve-lines">@field.Value</dd></div>
+            }
+        </dl>
+    }
+    @if (Model.Profile.Contacts.Count > 0)
+    {
+        <h3>@T["Emergency contacts"]</h3>
+        <div class="contact-list">
+            @foreach (var contact in Model.Profile.Contacts)
+            {
+                <div class="contact-row"><div><strong>@contact.Name</strong><span>@contact.Relationship</span></div><a class="btn btn-secondary" href="tel:@contact.Phone">@T["Call"] @contact.Phone</a></div>
+            }
+        </div>
+    }
+</section>
+
+<section class="card" aria-labelledby="report-heading">
+    <span class="eyebrow">@T["NOTIFY THE RIDER'S CONTACTS"]</span>
+    <h2 id="report-heading">@T["Report a possible accident"]</h2>
+    <p>@T["Reporting sends an unverified possible accident notification to the rider's verified emergency contacts. It does not replace a call to emergency services."]</p>
+    @if (Model.ReportError is not null) { <div class="alert alert-warning" role="alert">@T[Model.ReportError]</div> }
+    <form method="post" action="/e/@Model.Token/report" id="accident-report">
+        @Html.AntiForgeryToken()
+        <div asp-validation-summary="All" class="validation-summary" role="alert"></div>
+        <input asp-for="Report.SubmissionKey" type="hidden" />
+        <input asp-for="Report.Latitude" type="hidden" id="report-latitude" />
+        <input asp-for="Report.Longitude" type="hidden" id="report-longitude" />
+        <div class="location-panel">
+            <h3>@T["Accident location"]</h3>
+            <p>@T["Share this phone's location only if you are at the accident. Your browser will ask for permission. You can report without GPS."]</p>
+            <button type="button" class="btn btn-secondary" id="share-location">@T["Share my current location"]</button>
+            <button type="button" class="btn btn-link" id="clear-location" hidden>@T["Remove shared location"]</button>
+            <p id="location-status" role="status" class="field-help">@T["Location has not been requested."]</p>
+            <label asp-for="Report.LocationDescription">@T["Location or nearby landmarks"] <span class="field-help">(@T["optional"])</span></label>
+            <textarea asp-for="Report.LocationDescription" rows="2" maxlength="300" placeholder="@T["Street, junction, direction of travel, or a nearby landmark"]"></textarea>
+        </div>
+        <div class="form-grid">
+            <div><label asp-for="Report.Consciousness">@T["What have you observed?"]</label><select asp-for="Report.Consciousness"><option value="Unknown">@T["I do not know"]</option><option value="Conscious">@T["The rider appears conscious"]</option><option value="Unconscious">@T["The rider appears unconscious"]</option></select></div>
+            <div><label asp-for="Report.PeopleInvolved">@T["Reported number of people involved"]</label><input asp-for="Report.PeopleInvolved" type="number" min="1" max="20" inputmode="numeric" /></div>
+        </div>
+        <button type="submit" class="btn btn-primary btn-wide" id="report-submit">@T["Report accident / Notify emergency contacts"]</button>
+        <p class="field-help">@T["Submit once. A restricted incident page will open with notification status and a communication guide."]</p>
+    </form>
+</section>
+<section class="card" aria-labelledby="safety-heading">
+    <h2 id="safety-heading">@T["While waiting for help"]</h2>
+    <ul class="safety-list">
+        <li>@T["Give the dispatcher the exact location and number of people involved."]</li>
+        <li>@T["Follow the dispatcher's instructions."]</li>
+        <li>@T["Avoid moving the injured person unless there is immediate danger."]</li>
+        <li>@T["Do not remove the helmet without appropriate emergency guidance or training."]</li>
+    </ul>
+</section>
+@section Scripts {
+<script nonce="@Context.Items["CspNonce"]">
+(() => {
+    const share = document.getElementById('share-location');
+    const clear = document.getElementById('clear-location');
+    const status = document.getElementById('location-status');
+    const latitude = document.getElementById('report-latitude');
+    const longitude = document.getElementById('report-longitude');
+    const messages = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(new {
+        locating = T["Requesting your location…"],
+        unavailable = T["Location is unavailable. You can describe the location and submit without GPS."],
+        denied = T["Location permission was denied. You can describe the location and submit without GPS."],
+        shared = T["Location ready to share with this report:"],
+        removed = T["Shared location removed. You can submit without GPS."]
+    }));
+    if (latitude.value && longitude.value) {
+        status.textContent = messages.shared + ' ' + latitude.value + ', ' + longitude.value;
+        clear.hidden = false;
+    }
+    share.addEventListener('click', () => {
+        if (!navigator.geolocation) { status.textContent = messages.unavailable; return; }
+        share.disabled = true;
+        status.textContent = messages.locating;
+        navigator.geolocation.getCurrentPosition(position => {
+            latitude.value = position.coords.latitude.toString();
+            longitude.value = position.coords.longitude.toString();
+            status.textContent = messages.shared + ' ' + position.coords.latitude.toFixed(5) + ', ' + position.coords.longitude.toFixed(5);
+            clear.hidden = false;
+            share.disabled = false;
+        }, error => {
+            latitude.value = '';
+            longitude.value = '';
+            clear.hidden = true;
+            status.textContent = error.code === 1 ? messages.denied : messages.unavailable;
+            share.disabled = false;
+        }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+    });
+    clear.addEventListener('click', () => {
+        latitude.value = '';
+        longitude.value = '';
+        status.textContent = messages.removed;
+        clear.hidden = true;
+    });
+    document.getElementById('accident-report').addEventListener('submit', () => {
+        document.getElementById('report-submit').disabled = true;
+    });
+})();
+</script>
+}

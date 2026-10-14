@@ -1,0 +1,32 @@
+@model AdminDashboardModel
+@{ ViewData["Title"] = T["Administration"]; }
+<header class="page-header">
+    <div><p class="eyebrow">SCANBACK</p><h1>@T["Administration"]</h1>
+    <p>@T["Account controls and operational health, with medical information kept private."]</p></div>
+</header>
+<partial name="_Navigation" />
+<partial name="_Messages" />
+<section class="stat-grid" aria-label="@T["Platform overview"]">
+    <article class="card"><p class="text-muted">@T["Active accounts"]</p><h2>@Model.ActiveAccounts <small class="fs-6 text-muted">/ @Model.Accounts</small></h2><a asp-action="Accounts">@T["Manage accounts"]</a></article>
+    <article class="card"><p class="text-muted">@T["Active identifiers"]</p><h2>@Model.ActiveIdentifiers</h2><a asp-action="Identifiers">@T["Manage identifiers"]</a></article>
+    <article class="card"><p class="text-muted">@T["Open incidents"]</p><h2>@Model.OpenIncidents</h2><a asp-action="Incidents">@T["Review incident metadata"]</a></article>
+</section>
+<section class="dashboard-grid mt-4">
+    <article class="card">
+        <h2>@T["Notification status"]</h2>
+        <dl class="row mb-3">
+            <dt class="col-8">@T["Queued for retry or delivery"]</dt><dd class="col-4">@Model.QueuedNotifications</dd>
+            <dt class="col-8">@T["Accepted by email provider"]</dt><dd class="col-4">@Model.AcceptedNotifications</dd>
+            <dt class="col-8">@T["Retries exhausted"]</dt><dd class="col-4">@Model.ExhaustedNotifications</dd>
+        </dl>
+        <p class="field-help">@T["Provider acceptance does not confirm that an email was delivered or read."]</p>
+        <p><span class="badge @(Model.NotificationsEnabled ? "text-bg-success" : "text-bg-warning")">@(Model.NotificationsEnabled ? T["Notifications enabled"] : T["Notifications paused"])</span></p>
+        <a asp-action="Settings" class="btn btn-outline">@T["Notification settings"]</a>
+    </article>
+    <article class="card">
+        <h2>@T["Restricted administration"]</h2>
+        <p>@T["These screens expose account status, identifier status, delivery counts, and incident timestamps. Medical details, precise locations, contact addresses, and access tokens are excluded."]</p>
+        <p>@T["Changes to account status, identifiers, and platform settings are recorded in the audit log."]</p>
+        <a asp-action="Audit" class="btn btn-outline">@T["View audit log"]</a>
+    </article>
+</section>

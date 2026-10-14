@@ -1,0 +1,37 @@
+@model AdminSettingsModel
+@{ ViewData["Title"] = T["Platform settings"]; }
+<header class="page-header"><div><h1>@T["Platform settings"]</h1><p>@T["Control notification availability, incident retention, and temporary access."]</p></div></header>
+<partial name="_Navigation" />
+<partial name="_Messages" />
+<section class="card">
+    <form asp-action="Settings" method="post">
+        <div asp-validation-summary="All" class="text-danger" role="alert"></div>
+        <div class="form-check mb-4">
+            <input asp-for="NotificationsEnabled" class="form-check-input" />
+            <label asp-for="NotificationsEnabled" class="form-check-label">@T["Enable emergency contact notifications"]</label>
+            <p class="field-help mt-2">@T["Pausing notifications prevents delivery. The emergency page and emergency calling buttons remain available."]</p>
+        </div>
+        <div class="form-grid">
+            <div>
+                <label asp-for="IncidentRetentionDays" class="form-label">@T["Incident retention in days"]</label>
+                <input asp-for="IncidentRetentionDays" class="form-control" type="number" min="7" max="365" required aria-describedby="retention-help" />
+                <span asp-validation-for="IncidentRetentionDays" class="text-danger"></span>
+                <p class="field-help" id="retention-help">@T["Between 7 and 365 days. Expired records are removed by the retention worker."]</p>
+            </div>
+            <div>
+                <label asp-for="IncidentAccessHours" class="form-label">@T["Incident access lifetime in hours"]</label>
+                <input asp-for="IncidentAccessHours" class="form-control" type="number" min="1" max="72" required aria-describedby="access-help" />
+                <span asp-validation-for="IncidentAccessHours" class="text-danger"></span>
+                <p class="field-help" id="access-help">@T["Between 1 and 72 hours. Applies to new incidents and their invitations."]</p>
+            </div>
+            <div>
+                <label asp-for="NotificationCooldownMinutes" class="form-label">@T["Reporting cooldown in minutes"]</label>
+                <input asp-for="NotificationCooldownMinutes" class="form-control" type="number" min="1" max="60" required aria-describedby="cooldown-help" />
+                <span asp-validation-for="NotificationCooldownMinutes" class="text-danger"></span>
+                <p class="field-help" id="cooldown-help">@T["Between 1 and 60 minutes. Limits repeated reports for the same rider."]</p>
+            </div>
+        </div>
+        <p class="field-help mt-4">@T["Email credentials and sender configuration belong in protected environment settings, outside this interface."]</p>
+        <button type="submit" class="btn btn-primary">@T["Save settings"]</button>
+    </form>
+</section>

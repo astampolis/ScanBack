@@ -1,0 +1,25 @@
+@model AuthenticatorSetupModel
+@{ ViewData["Title"] = T["Account security"]; }
+<div class="page-header"><div><p class="eyebrow">SCANBACK</p><h1>@T["Account security"]</h1><p>@T["Protect your account with an authenticator app."]</p></div></div>
+<section class="card security-card">
+@if (Model.Enabled)
+{
+    <span class="badge">@T["Two-factor authentication enabled"]</span>
+    <p>@T["Your account requires an authenticator code when you sign in."]</p>
+    <a class="btn btn-primary" href="/profile">@T["Back to dashboard"]</a>
+}
+else
+{
+    <h2>@T["Set up two-factor authentication"]</h2>
+    <p>@T["Scan this code with Microsoft Authenticator, Google Authenticator, or another TOTP app."]</p>
+    <img src="/security/qr" width="220" height="220" alt="@T["Authenticator setup QR code"]" />
+    <p>@T["Or enter this setup key manually:"] <code>@Model.SharedKey</code></p>
+    <form method="post" asp-action="Enable">
+        <div asp-validation-summary="All" class="text-danger" role="alert"></div>
+        <label asp-for="Code">@T["Six-digit authenticator code"]</label>
+        <input asp-for="Code" class="form-control" inputmode="numeric" autocomplete="one-time-code" required maxlength="12" />
+        <button class="btn btn-primary mt-3" type="submit">@T["Enable two-factor authentication"]</button>
+    </form>
+    <p class="field-help">@T["Administrator access requires two-factor authentication."]</p>
+}
+</section>

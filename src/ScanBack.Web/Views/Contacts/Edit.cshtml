@@ -1,0 +1,10 @@
+@model ContactEditModel
+@{ var title = Model.Id.HasValue ? T["Edit emergency contact"] : T["Add emergency contact"]; ViewData["Title"] = title; }
+<div class="page-header"><div><h1>@title</h1><p>@T["Tell your contact why you are adding them and ask permission before publishing their phone number."]</p></div><a class="btn btn-outline" asp-action="Index">@T["Back to contacts"]</a></div>
+<section class="card"><form method="post"><div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div><div class="form-grid">
+<div class="form-field"><label asp-for="Name">@T["Contact name"]</label><input asp-for="Name" autocomplete="off" maxlength="160" /><span asp-validation-for="Name"></span></div>
+<div class="form-field"><label asp-for="Relationship">@T["Relationship"]</label><input asp-for="Relationship" maxlength="80" /><span asp-validation-for="Relationship"></span></div>
+<div class="form-field"><label asp-for="Email">@T["Email address"]</label><input asp-for="Email" autocomplete="off" maxlength="254" /><span asp-validation-for="Email"></span><p class="field-help">@T["This address stays private and must be confirmed before emergency notifications."]</p></div>
+<div class="form-field"><label asp-for="Phone">@T["Phone number (optional)"]</label><input asp-for="Phone" type="tel" maxlength="40" /><span asp-validation-for="Phone"></span><p class="field-help">@T["Include the country code, for example +30."]</p></div></div>
+<label class="check-label"><input asp-for="NotifyEnabled" /> @T["Notify this contact by email when a possible accident is reported."]</label>
+<label class="check-label"><input asp-for="PublicPhone" /> @T["Allow this phone number to appear on my public emergency page when contact visibility is enabled."]</label><p class="field-help">@T["The person scanning your sticker can call a published contact number. Email addresses are never shown."]</p><div class="form-actions"><button class="btn btn-primary" type="submit">@T["Save contact"]</button><a class="btn btn-outline" asp-action="Index">@T["Cancel"]</a></div></form></section>

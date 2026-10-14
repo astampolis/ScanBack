@@ -1,0 +1,3 @@
+@model ContactEditModel
+@{ ViewData["Title"] = T["Remove emergency contact"]; }
+<div class="page-header"><div><h1>@T["Remove emergency contact"]</h1></div></div><section class="card danger-zone"><h2>@Model.Name</h2><p>@T["This contact will be removed, pending notifications deleted, and their incident access revoked."]</p><form asp-action="DeleteConfirmed" asp-route-id="@Model.Id" method="post"><div class="form-actions"><button class="btn btn-danger" type="submit">@T["Remove contact"]</button><a class="btn btn-outline" asp-action="Index">@T["Cancel"]</a></div></form></section>

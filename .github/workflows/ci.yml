@@ -1,0 +1,30 @@
+name: Build and test
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  mvp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Restore and build
+        run: ./scripts/install.sh
+      - name: Start local SQL Server and SMTP
+        run: ./scripts/dev-up.sh
+      - name: Test real SQL and MVC flows
+        run: ./scripts/test.sh
+      - name: Retain test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: artifacts/test-results
+      - name: Stop development services
+        if: always()
+        run: docker stop scanback-sql scanback-mail || true

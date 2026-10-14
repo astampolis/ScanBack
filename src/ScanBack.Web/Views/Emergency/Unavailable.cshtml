@@ -1,0 +1,8 @@
+@model EmergencyUnavailableViewModel
+@{ ViewData["Title"] = T["Emergency link unavailable"]; }
+<header class="page-header"><span class="eyebrow">@T["SCANBACK EMERGENCY"]</span><h1>@T["Need urgent help?"]</h1><p>@T["Call emergency services immediately if someone needs urgent help."]</p></header>
+<div class="call-grid">
+    <a href="tel:112" class="btn btn-danger call-button"><strong>112</strong><span>@T["European Emergency Number"]</span></a>
+    <a href="tel:166" class="btn btn-danger call-button"><strong>166</strong><span>@T["Ambulance Service · Greece"]</span></a>
+</div>
+<section class="card"><h2>@T["Emergency link unavailable"]</h2><p>@T[Model.Message]</p><p>@T["It may have been deactivated, replaced, or expired. No private rider information is available through this link."]</p><p class="field-help">@T["These buttons open your phone dialer. ScanBack does not call or dispatch emergency services."]</p></section>
