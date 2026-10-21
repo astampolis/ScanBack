@@ -195,6 +195,11 @@ namespace ScanBack.Infrastructure.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<string>("ConsentText")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 
@@ -221,6 +226,10 @@ namespace ScanBack.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("ConsentPolicyVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(254)
@@ -234,8 +243,17 @@ namespace ScanBack.Infrastructure.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("nvarchar(160)");
 
+                    b.Property<DateTimeOffset?>("NotificationsConsentedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("NotificationsRequested")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("NotifyEnabled")
                         .HasColumnType("bit");
+
+                    b.Property<Guid>("PermissionVersion")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("Phone")
                         .IsRequired()
@@ -243,6 +261,12 @@ namespace ScanBack.Infrastructure.Migrations
                         .HasColumnType("nvarchar(40)");
 
                     b.Property<bool>("PublicPhone")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTimeOffset?>("PublicPhoneConsentedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<bool>("PublicPhoneRequested")
                         .HasColumnType("bit");
 
                     b.Property<string>("Relationship")
@@ -283,6 +307,9 @@ namespace ScanBack.Infrastructure.Migrations
                         .HasColumnType("datetimeoffset");
 
                     b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsAdminBlocked")
                         .HasColumnType("bit");
 
                     b.Property<string>("Label")
@@ -396,6 +423,9 @@ namespace ScanBack.Infrastructure.Migrations
                     b.Property<Guid>("IncidentId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<DateTimeOffset?>("InvitationConsumedAt")
+                        .HasColumnType("datetimeoffset");
+
                     b.Property<bool>("IsRevoked")
                         .HasColumnType("bit");
 
@@ -403,6 +433,11 @@ namespace ScanBack.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("nvarchar(32)");
+
+                    b.Property<string>("SessionTokenHash")
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
@@ -417,6 +452,10 @@ namespace ScanBack.Infrastructure.Migrations
                     b.HasIndex("ExpiresAt");
 
                     b.HasIndex("IncidentId");
+
+                    b.HasIndex("SessionTokenHash")
+                        .IsUnique()
+                        .HasFilter("[SessionTokenHash] IS NOT NULL");
 
                     b.HasIndex("TokenHash")
                         .IsUnique();
@@ -537,6 +576,10 @@ namespace ScanBack.Infrastructure.Migrations
 
                     b.Property<DateTimeOffset?>("ConsentAt")
                         .HasColumnType("datetimeoffset");
+
+                    b.Property<string>("ConsentPolicyVersion")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<DateOnly?>("DateOfBirth")
                         .HasColumnType("date");

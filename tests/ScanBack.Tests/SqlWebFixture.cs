@@ -22,18 +22,20 @@ public sealed class SqlWebCollection : ICollectionFixture<SqlWebFixture>
 
 /// <summary>
 /// Exercises real SQL Server migrations, Identity, MVC binding, antiforgery and
-/// cookies. Only the notification/retention workers are disabled: emails remain
-/// in their actual encrypted outbox so notification assertions are deterministic.
+/// cookies. Deployment is explicit: this fixture migrates/seeds its own database
+/// before requests; the web host never initializes schema or runs background jobs.
 /// Every run uses and deletes a separate database. A missing SQL connection fails
 /// explicitly rather than silently skipping security checks.
 /// </summary>
 public sealed class SqlWebFixture : IAsyncLifetime
 {
     public const string Password = "Test-only!Rider2026";
+    public const string PolicyVersion = "2026-10-tests";
     private string _connection = "";
     private readonly string _keyDirectory = Path.Combine(Path.GetTempPath(), "scanback-tests", Guid.NewGuid().ToString("N"));
     private int _clientNumber;
     public TestApplicationFactory Factory { get; private set; } = null!;
+    internal string AdministratorConnectionString => _connection;
 
     public async Task InitializeAsync()
     {
@@ -62,15 +64,30 @@ public sealed class SqlWebFixture : IAsyncLifetime
             ["Site__BaseUrl"] = "http://localhost",
             ["Encryption__KeyDirectory"] = _keyDirectory,
             ["Encryption__CertificatePath"] = "",
+            ["Encryption__CertificateThumbprint"] = "",
+            ["Storage__PhotoDirectory"] = Path.Combine(_keyDirectory, "photos"),
             ["AllowedHosts"] = "localhost;127.0.0.1",
             ["Admin__Email"] = "",
-            ["Admin__Password"] = ""
+            ["Admin__Password"] = "",
+            ["Privacy__PolicyVersion"] = PolicyVersion,
+            ["Privacy__ControllerName"] = "Integration test controller",
+            ["Privacy__ContactEmail"] = "privacy@example.test"
         };
         var original = overrides.Keys.ToDictionary(key => key, Environment.GetEnvironmentVariable);
         try
         {
             foreach (var (key, value) in overrides) Environment.SetEnvironmentVariable(key, value);
             Factory = new TestApplicationFactory();
+            using (var scope = Factory.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                await db.Database.MigrateAsync();
+                if (!await db.PlatformSettings.AnyAsync()) db.PlatformSettings.Add(new PlatformSettings());
+                await db.SaveChangesAsync();
+                var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+                if (!await roles.RoleExistsAsync("Administrator"))
+                    Assert.True((await roles.CreateAsync(new IdentityRole("Administrator"))).Succeeded);
+            }
             using var client = Client();
             var response = await client.GetAsync("/health");
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -129,7 +146,8 @@ public sealed class SqlWebFixture : IAsyncLifetime
             Instructions = "Instruction marker " + suffix,
             PublicFields = publicFields,
             HealthConsent = healthConsent,
-            ConsentAt = healthConsent ? DateTimeOffset.UtcNow : null
+            ConsentAt = healthConsent ? DateTimeOffset.UtcNow : null,
+            ConsentPolicyVersion = healthConsent ? PolicyVersion : null
         };
         var contact = new EmergencyContact
         {
@@ -140,6 +158,10 @@ public sealed class SqlWebFixture : IAsyncLifetime
             Phone = "+306900000001",
             NotifyEnabled = true,
             PublicPhone = true,
+            PublicPhoneRequested = true,
+            PublicPhoneConsentedAt = verifiedContact ? DateTimeOffset.UtcNow : null,
+            NotificationsConsentedAt = verifiedContact ? DateTimeOffset.UtcNow : null,
+            ConsentPolicyVersion = verifiedContact ? PolicyVersion : null,
             IsVerified = verifiedContact
         };
         var unverified = new EmergencyContact

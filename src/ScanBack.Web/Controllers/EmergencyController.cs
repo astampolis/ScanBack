@@ -75,6 +75,8 @@ public sealed class EmergencyController(AppDbContext db, TokenService tokens, Si
         {
             IncidentId = incident.Id,
             TokenHash = TokenService.Hash(reporterToken),
+            SessionTokenHash = TokenService.Hash(reporterToken),
+            InvitationConsumedAt = now,
             ExpiresAt = incident.ExpiresAt,
             Role = "Reporter"
         };
@@ -82,7 +84,6 @@ public sealed class EmergencyController(AppDbContext db, TokenService tokens, Si
         db.IncidentAccesses.Add(reporterAccess);
         if (settings.NotificationsEnabled)
         {
-            var displayName = ProjectPublic(identifier, token).DisplayName;
             foreach (var contact in identifier.RiderProfile.Contacts.Where(c => c.IsVerified && c.NotifyEnabled))
             {
                 var contactToken = TokenService.Generate();
@@ -95,7 +96,7 @@ public sealed class EmergencyController(AppDbContext db, TokenService tokens, Si
                     Role = "Contact"
                 });
                 var invitation = links.Absolute($"/incident/join/{contactToken}");
-                var unsubscribe = links.Absolute($"/contacts/unsubscribe/{Uri.EscapeDataString(tokens.Protect("unsubscribe:" + contact.Id))}");
+                var unsubscribe = links.Absolute($"/contacts/unsubscribe/{Uri.EscapeDataString(tokens.Protect($"unsubscribe:{contact.Id}:{contact.PermissionVersion}"))}");
                 var greekTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Athens");
                 var reportTime = TimeZoneInfo.ConvertTime(now, greekTimeZone);
                 var expiryTime = TimeZoneInfo.ConvertTime(incident.ExpiresAt, greekTimeZone);
@@ -106,7 +107,7 @@ public sealed class EmergencyController(AppDbContext db, TokenService tokens, Si
                     EmergencyContactId = contact.Id,
                     ToEmail = contact.Email,
                     Subject = "ScanBack: possible accident reported / Αναφορά πιθανού ατυχήματος",
-                    Body = $"Someone accessed the emergency sticker for {displayName} and reported a possible accident at {reportTime:yyyy-MM-dd HH:mm} (Europe/Athens).\n\nThis report is unverified. ScanBack has not contacted emergency services. If assistance is needed, telephone 112 or 166 in Greece.\n\nView the reported location and incident through your private invitation:\n{invitation}\n\nThis invitation expires at {expiryTime:yyyy-MM-dd HH:mm} (Europe/Athens). Do not forward it.\n\nΚάποιος ανέφερε πιθανό ατύχημα. Η αναφορά δεν έχει επιβεβαιωθεί. Το ScanBack δεν έχει ειδοποιήσει τις υπηρεσίες έκτακτης ανάγκης. Για βοήθεια στην Ελλάδα καλέστε 112 ή 166.\n\nStop receiving notifications / Διακοπή ειδοποιήσεων:\n{unsubscribe}"
+                    Body = $"Someone accessed a ScanBack emergency sticker and reported a possible accident at {reportTime:yyyy-MM-dd HH:mm} (Europe/Athens).\n\nThis report is unverified. ScanBack has not contacted emergency services. If assistance is needed, telephone 112 or 166 in Greece.\n\nView the rider and reported location through your single-use private invitation:\n{invitation}\n\nThis invitation expires at {expiryTime:yyyy-MM-dd HH:mm} (Europe/Athens). Do not forward it.\n\nΚάποιος ανέφερε πιθανό ατύχημα. Η αναφορά δεν έχει επιβεβαιωθεί. Το ScanBack δεν έχει ειδοποιήσει τις υπηρεσίες έκτακτης ανάγκης. Για βοήθεια στην Ελλάδα καλέστε 112 ή 166.\n\nStop receiving notifications / Διακοπή ειδοποιήσεων:\n{unsubscribe}"
                 });
             }
         }
@@ -134,11 +135,20 @@ public sealed class EmergencyController(AppDbContext db, TokenService tokens, Si
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Redeem(string token)
     {
+        await using var transaction = await db.Database.BeginTransactionAsync(db.Database.IsSqlServer() ? IsolationLevel.ReadCommitted : IsolationLevel.Serializable);
         var access = await FindInvitation(token);
         if (access is null) return Unavailable();
-        SetAccessCookie(access, token);
+        var sessionToken = TokenService.Generate();
+        var now = DateTimeOffset.UtcNow;
+        // A successful redemption replaces the emailed capability with a different cookie
+        // secret. An atomic conditional update makes replay and simultaneous redemption fail.
+        var updated = await db.IncidentAccesses.Where(a => a.Id == access.Id && !a.IsRevoked && a.InvitationConsumedAt == null && a.ExpiresAt > now)
+            .ExecuteUpdateAsync(set => set.SetProperty(a => a.InvitationConsumedAt, now).SetProperty(a => a.SessionTokenHash, TokenService.Hash(sessionToken)));
+        if (updated != 1) return Unavailable();
         db.AuditEvents.Add(new AuditEvent { Action = "Incident.InvitationRedeemed", EntityId = access.IncidentId.ToString() });
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
+        SetAccessCookie(access, sessionToken);
         return Redirect($"/incident/{access.IncidentId}");
     }
 
@@ -149,7 +159,7 @@ public sealed class EmergencyController(AppDbContext db, TokenService tokens, Si
         if (access is null) return Unavailable();
         var incident = access.Incident;
         var profile = ProjectPublic(incident.EmergencyIdentifier, "");
-        var notices = await db.OutboxMessages.AsNoTracking().Where(m => m.IncidentId == id).ToListAsync();
+        var notices = await db.OutboxMessages.AsNoTracking().Where(m => m.IncidentId == id).Select(m => new { m.AcceptedAt, m.Attempts }).ToListAsync();
         db.AuditEvents.Add(new AuditEvent { Action = "Incident.Viewed." + access.Role, EntityId = id.ToString() });
         await db.SaveChangesAsync();
         var maps = incident.Latitude is double lat && incident.Longitude is double lng
@@ -181,7 +191,7 @@ public sealed class EmergencyController(AppDbContext db, TokenService tokens, Si
         var hash = TokenService.Hash(token);
         var identifier = await db.EmergencyIdentifiers.AsNoTracking()
             .Include(i => i.RiderProfile).ThenInclude(p => p.Contacts)
-            .FirstOrDefaultAsync(i => i.TokenHash == hash && i.IsActive && i.RevokedAt == null);
+            .FirstOrDefaultAsync(i => i.TokenHash == hash && i.IsActive && !i.IsAdminBlocked && i.RevokedAt == null);
         if (identifier is null || !await db.Users.AnyAsync(u => u.Id == identifier.RiderProfile.UserId && u.IsActive)) return null;
         return identifier;
     }
@@ -190,7 +200,7 @@ public sealed class EmergencyController(AppDbContext db, TokenService tokens, Si
     {
         if (!ValidToken(token)) return null;
         var hash = TokenService.Hash(token);
-        var access = await AccessQuery().FirstOrDefaultAsync(a => a.TokenHash == hash && a.Role == "Contact");
+        var access = await AccessQuery().FirstOrDefaultAsync(a => a.TokenHash == hash && a.Role == "Contact" && a.InvitationConsumedAt == null);
         return await AccessIsValid(access) ? access : null;
     }
 
@@ -206,7 +216,8 @@ public sealed class EmergencyController(AppDbContext db, TokenService tokens, Si
         var parts = value.Split('|');
         if (parts.Length != 3 || parts[0] != "incident" || !Guid.TryParse(parts[1], out var grantId) || !ValidToken(parts[2])) return null;
         var hash = TokenService.Hash(parts[2]);
-        var access = await AccessQuery().FirstOrDefaultAsync(a => a.Id == grantId && a.IncidentId == incidentId && a.TokenHash == hash);
+        var access = await AccessQuery().FirstOrDefaultAsync(a => a.Id == grantId && a.IncidentId == incidentId
+            && (a.SessionTokenHash == hash || (a.Role == "Reporter" && a.SessionTokenHash == null && a.TokenHash == hash)));
         return await AccessIsValid(access) ? access : null;
     }
 
@@ -215,7 +226,7 @@ public sealed class EmergencyController(AppDbContext db, TokenService tokens, Si
         if (access is null || access.IsRevoked || access.ExpiresAt <= DateTimeOffset.UtcNow) return false;
         var incident = access.Incident;
         if (incident.RiderProfileId != incident.EmergencyIdentifier.RiderProfileId) return false;
-        if (incident.IsClosed || incident.ExpiresAt <= DateTimeOffset.UtcNow || !incident.EmergencyIdentifier.IsActive || incident.EmergencyIdentifier.RevokedAt is not null) return false;
+        if (incident.IsClosed || incident.ExpiresAt <= DateTimeOffset.UtcNow || !incident.EmergencyIdentifier.IsActive || incident.EmergencyIdentifier.IsAdminBlocked || incident.EmergencyIdentifier.RevokedAt is not null) return false;
         if (!await db.Users.AnyAsync(u => u.Id == incident.EmergencyIdentifier.RiderProfile.UserId && u.IsActive)) return false;
         return access.Role == "Reporter" || (access.Role == "Contact" && access.EmergencyContactId is Guid contactId
             && await db.EmergencyContacts.AnyAsync(c => c.Id == contactId && c.RiderProfileId == incident.RiderProfileId && c.IsVerified && c.NotifyEnabled));
@@ -238,42 +249,17 @@ public sealed class EmergencyController(AppDbContext db, TokenService tokens, Si
 
     private PublicEmergencyProfile ProjectPublic(EmergencyIdentifier identifier, string token)
     {
-        var profile = identifier.RiderProfile;
-        var fields = profile.PublicFields;
-        var publicMedical = new List<PublicMedicalField>();
-        if (profile.HealthConsent)
-        {
-            Add(PublicFields.BloodType, "Blood type", profile.BloodType);
-            Add(PublicFields.Allergies, "Allergies", profile.Allergies);
-            Add(PublicFields.Conditions, "Medical conditions", profile.Conditions);
-            Add(PublicFields.Medications, "Medications", profile.Medications);
-            Add(PublicFields.OtherInformation, "Other medical information", profile.OtherInformation);
-            Add(PublicFields.Instructions, "Instructions for responders", profile.Instructions);
-        }
-        int? age = null;
-        if (fields.HasFlag(PublicFields.Age) && profile.DateOfBirth is DateOnly birth)
-        {
-            var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Europe/Athens")).DateTime);
-            var years = today.Year - birth.Year - (today < birth.AddYears(today.Year - birth.Year) ? 1 : 0);
-            if (years is >= 0 and <= 125) age = years;
-        }
-        var label = string.IsNullOrWhiteSpace(identifier.Label) ? "Rider " + identifier.Id.ToString("N")[..8] : identifier.Label;
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Europe/Athens")).DateTime);
+        var projected = ScanBack.Application.PublicProfileProjection.Project(identifier, today);
         return new PublicEmergencyProfile
         {
-            DisplayName = fields.HasFlag(PublicFields.Name) && !string.IsNullOrWhiteSpace(profile.FullName) ? profile.FullName : label,
-            IdentifierLabel = label,
-            Age = age,
-            PhotoUrl = fields.HasFlag(PublicFields.Photo) && profile.PhotoFileName is not null && token.Length > 0 ? "/profile/photo/" + Uri.EscapeDataString(token) : null,
-            MedicalFields = publicMedical,
-            Contacts = fields.HasFlag(PublicFields.Contacts)
-                ? profile.Contacts.Where(c => c.PublicPhone && c.IsVerified && !string.IsNullOrWhiteSpace(c.Phone))
-                    .Select(c => new PublicContactView(c.Name, c.Relationship, c.Phone)).ToList()
-                : []
+            DisplayName = projected.DisplayName,
+            IdentifierLabel = projected.IdentifierLabel,
+            Age = projected.Age,
+            PhotoUrl = projected.CanShowPhoto && token.Length > 0 ? "/profile/photo/" + Uri.EscapeDataString(token) : null,
+            MedicalFields = projected.MedicalFields.Select(f => new PublicMedicalField(f.Label, f.Value)).ToList(),
+            Contacts = projected.Contacts.Select(c => new PublicContactView(c.Name, c.Relationship, c.Phone)).ToList()
         };
-        void Add(PublicFields field, string labelText, string? value)
-        {
-            if (fields.HasFlag(field) && !string.IsNullOrWhiteSpace(value)) publicMedical.Add(new PublicMedicalField(labelText, value));
-        }
     }
 
     private string DispatcherScript(Incident incident, PublicEmergencyProfile profile)

@@ -1,3 +1,4 @@
+using System.Data;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -5,23 +6,31 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using ScanBack.Domain;
 using ScanBack.Infrastructure;
+using ScanBack.Infrastructure.Hosting;
 using ScanBack.Web.Models;
 using ScanBack.Web.Services;
 
 namespace ScanBack.Web.Controllers;
 
 [Route("account"), EnableRateLimiting("authentication")]
-public sealed class AccountController(UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn, AppDbContext db, SiteLinks links) : Controller
+public sealed class AccountController(UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn, AppDbContext db, SiteLinks links, IOptions<PrivacyOptions> privacy) : Controller
 {
     [HttpGet("register"), AllowAnonymous]
     public IActionResult Register() => View(new RegisterModel());
 
     [HttpPost("register"), AllowAnonymous, ValidateAntiForgeryToken]
-    public async Task<IActionResult> Register(RegisterModel model)
+    public async Task<IActionResult> Register(RegisterModel model, string? privacyPolicyVersion = null)
     {
         if (!model.PrivacyAccepted) ModelState.AddModelError(nameof(model.PrivacyAccepted), "Read and accept the privacy notice to create an account.");
+        else if (privacyPolicyVersion != privacy.Value.PolicyVersion)
+        {
+            ModelState.Remove(nameof(model.PrivacyAccepted));
+            model.PrivacyAccepted = false;
+            ModelState.AddModelError(nameof(model.PrivacyAccepted), "The privacy notice changed. Review the current notice before creating your account.");
+        }
         if (!ModelState.IsValid) return View(model);
         var email = model.Email.Trim();
         await using var transaction = await db.Database.BeginTransactionAsync();
@@ -34,7 +43,7 @@ public sealed class AccountController(UserManager<ApplicationUser> users, SignIn
         }
         var profile = new RiderProfile { UserId = user.Id, FullName = model.FullName.Trim() };
         db.RiderProfiles.Add(profile);
-        db.ConsentRecords.Add(new ConsentRecord { UserId = user.Id, Action = "PrivacyNoticeAccepted" });
+        db.ConsentRecords.Add(new ConsentRecord { UserId = user.Id, PolicyVersion = privacy.Value.PolicyVersion, Action = "PrivacyNoticeAccepted" });
         db.AuditEvents.Add(new AuditEvent { ActorId = user.Id, Action = "AccountCreated", EntityId = profile.Id.ToString() });
         await QueueConfirmation(user, profile.Id);
         await db.SaveChangesAsync();
@@ -104,9 +113,19 @@ public sealed class AccountController(UserManager<ApplicationUser> users, SignIn
     }
 
     [HttpGet("confirm-email"), AllowAnonymous]
-    public async Task<IActionResult> ConfirmEmail(string? userId, string? code)
+    public IActionResult ConfirmEmail(string? userId, string? code)
     {
-        if (string.IsNullOrWhiteSpace(userId) || userId.Length > 450 || string.IsNullOrWhiteSpace(code) || code.Length > 4096) return View("Message", "This confirmation link is invalid or expired.");
+        if (string.IsNullOrWhiteSpace(userId) || userId.Length > 450 || string.IsNullOrWhiteSpace(code) || code.Length > 4096)
+            return View("Message", "This confirmation link is invalid or expired.");
+        // Mail scanners may open GET links; confirming ownership needs an explicit POST.
+        return View("ConfirmEmail", new EmailConfirmationInput(userId, code));
+    }
+
+    [HttpPost("confirm-email"), AllowAnonymous, ValidateAntiForgeryToken]
+    public async Task<IActionResult> ConfirmEmailConfirmed(string? userId, string? code)
+    {
+        if (string.IsNullOrWhiteSpace(userId) || userId.Length > 450 || string.IsNullOrWhiteSpace(code) || code.Length > 4096)
+            return View("Message", "This confirmation link is invalid or expired.");
         var user = await users.FindByIdAsync(userId);
         if (user is null || !user.IsActive) return View("Message", "This confirmation link is invalid or expired.");
         try
@@ -125,11 +144,18 @@ public sealed class AccountController(UserManager<ApplicationUser> users, SignIn
     {
         if (!ModelState.IsValid) return View("Email", model);
         var user = await users.FindByEmailAsync(model.Email.Trim());
-        if (user is { IsActive: true, EmailConfirmed: false } && !await RecentlyQueued(user.Email!, "Confirmation"))
+        if (user is { IsActive: true, EmailConfirmed: false })
         {
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            if (!await LockMessageRecipient(user.Id))
+                return View("Message", "If an account needs email confirmation, a new link will be emailed. Please check your inbox and spam folder.");
+            await db.Entry(user).ReloadAsync();
+            if (!user.IsActive || user.EmailConfirmed || await RecentlyQueued(user.Email!, "Confirmation"))
+                return View("Message", "If an account needs email confirmation, a new link will be emailed. Please check your inbox and spam folder.");
             var profileId = await db.RiderProfiles.Where(x => x.UserId == user.Id).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
             await QueueConfirmation(user, profileId);
             await db.SaveChangesAsync();
+            await transaction.CommitAsync();
         }
         return View("Message", "If an account needs email confirmation, a new link will be emailed. Please check your inbox and spam folder.");
     }
@@ -142,13 +168,20 @@ public sealed class AccountController(UserManager<ApplicationUser> users, SignIn
     {
         if (!ModelState.IsValid) return View("Email", model);
         var user = await users.FindByEmailAsync(model.Email.Trim());
-        if (user is { IsActive: true, EmailConfirmed: true } && !await RecentlyQueued(user.Email!, "PasswordReset"))
+        if (user is { IsActive: true, EmailConfirmed: true })
         {
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+            if (!await LockMessageRecipient(user.Id))
+                return View("Message", "If a confirmed account matches that address, a password reset link will be emailed.");
+            await db.Entry(user).ReloadAsync();
+            if (!user.IsActive || !user.EmailConfirmed || await RecentlyQueued(user.Email!, "PasswordReset"))
+                return View("Message", "If a confirmed account matches that address, a password reset link will be emailed.");
             var code = Encode(await users.GeneratePasswordResetTokenAsync(user));
             var url = links.Absolute($"/account/reset-password?email={Uri.EscapeDataString(user.Email!)}&code={Uri.EscapeDataString(code)}");
             var profileId = await db.RiderProfiles.Where(x => x.UserId == user.Id).Select(x => (Guid?)x.Id).FirstOrDefaultAsync();
             db.OutboxMessages.Add(new OutboxMessage { ToEmail = user.Email!, RiderProfileId = profileId, Subject = "ScanBack — reset your password", Kind = "PasswordReset", Body = $"A password reset was requested for your ScanBack account.\n\nReset your password: {url}\n\nIf you did not request this, ignore this message." });
             await db.SaveChangesAsync();
+            await transaction.CommitAsync();
         }
         return View("Message", "If a confirmed account matches that address, a password reset link will be emailed.");
     }
@@ -185,6 +218,14 @@ public sealed class AccountController(UserManager<ApplicationUser> users, SignIn
     [HttpGet("access-denied"), AllowAnonymous]
     public IActionResult AccessDenied() { Response.StatusCode = 403; return View("Message", "You do not have permission to access this page."); }
 
+    private async Task<bool> LockMessageRecipient(string id)
+    {
+        // Serialize cooldown checks for one recipient across app instances. No email or IP is stored as a lock key.
+        if (db.Database.IsSqlServer())
+            return await db.Users.FromSqlInterpolated($"SELECT * FROM [AspNetUsers] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {id}")
+                .AsNoTracking().Select(x => x.Id).SingleOrDefaultAsync() is not null;
+        return await db.Users.AnyAsync(x => x.Id == id);
+    }
     private Task<bool> RecentlyQueued(string email, string kind)
     {
         var since = DateTimeOffset.UtcNow.AddMinutes(-5);
@@ -199,3 +240,5 @@ public sealed class AccountController(UserManager<ApplicationUser> users, SignIn
     private static string Encode(string value) => WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(value));
     private static string Decode(string value) => Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(value));
 }
+
+public sealed record EmailConfirmationInput(string UserId, string Code);

@@ -1,32 +1,65 @@
 @{
+    var seo = ViewData["Seo"] as PublicSeoMetadata;
     var controller = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
-    var signedIn = User.Identity?.IsAuthenticated == true;
+    var signedIn = seo is null && User.Identity?.IsAuthenticated == true;
     var isEmergency = controller.Equals("Emergency", StringComparison.OrdinalIgnoreCase)
         || controller.Equals("Incident", StringComparison.OrdinalIgnoreCase);
     var isWorkspace = signedIn && !isEmergency && !controller.Equals("Home", StringComparison.OrdinalIgnoreCase)
         && !controller.Equals("Account", StringComparison.OrdinalIgnoreCase);
     var returnUrl = Context.Request.Path + Context.Request.QueryString;
+    var homeUrl = "/" + (T.IsGreek ? "el" : "en");
     var action = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
     string Current(string name, string? selectedAction = null) => controller.Equals(name, StringComparison.OrdinalIgnoreCase)
         && (selectedAction is null || action.Equals(selectedAction, StringComparison.OrdinalIgnoreCase)) ? " active" : "";
 }
 <!DOCTYPE html>
-<html lang="@(T.IsGreek ? "el" : "en")">
+<html lang="@(seo?.Language ?? (T.IsGreek ? "el" : "en"))">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#171d1b" />
-    <meta name="description" content="ScanBack connects motorcycle riders with the people who can help. QR and NFC emergency profiles, with privacy in your hands." />
-    <title>@ViewData["Title"] · ScanBack</title>
+    <meta name="robots" content="@(seo is null ? "noindex, nofollow" : "index, follow, max-image-preview:large")" />
+    <meta name="description" content="@(seo?.Description ?? (T.IsGreek ? "Προφίλ έκτακτης ανάγκης για μοτοσικλετιστές με QR και NFC. Εσείς επιλέγετε ποιες πληροφορίες μοιράζεστε." : "QR and NFC emergency profiles for motorcycle riders. You choose the information you share."))" />
+    <title>@(seo?.Title ?? $"{ViewData["Title"]} · ScanBack")</title>
+    @if (seo is not null)
+    {
+        <link rel="canonical" href="@seo.CanonicalUrl" />
+        @foreach (var alternate in seo.Alternates)
+        {
+            <link rel="alternate" hreflang="@alternate.Language" href="@alternate.Url" />
+        }
+        <link rel="alternate" hreflang="x-default" href="@seo.Alternates[0].Url" />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="ScanBack" />
+        <meta property="og:title" content="@seo.Title" />
+        <meta property="og:description" content="@seo.Description" />
+        <meta property="og:url" content="@seo.CanonicalUrl" />
+        <meta property="og:locale" content="@(seo.Language == "el" ? "el_GR" : "en_GB")" />
+        <meta property="og:locale:alternate" content="@(seo.Language == "el" ? "en_GB" : "el_GR")" />
+        <meta property="og:image" content="@seo.ImageUrl" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="ScanBack · QR + NFC · Motorcycle emergency profiles" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="@seo.Title" />
+        <meta name="twitter:description" content="@seo.Description" />
+        <meta name="twitter:image" content="@seo.ImageUrl" />
+        <meta name="twitter:image:alt" content="ScanBack · QR + NFC · Motorcycle emergency profiles" />
+        <script type="application/ld+json" nonce="@Context.Items["CspNonce"]">@Html.Raw(seo.StructuredDataJson)</script>
+    }
     <link rel="icon" type="image/svg+xml" href="~/favicon.svg" />
     <link rel="stylesheet" href="~/vendor/bootstrap/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    @if (seo is not null)
+    {
+        <link rel="stylesheet" href="~/css/marketing.css" asp-append-version="true" />
+    }
     @await RenderSectionAsync("Head", required: false)
 </head>
 <body class="@(isWorkspace ? "workspace-layout" : "public-layout") @(isEmergency ? "emergency-layout" : "")">
     <a href="#main-content" class="skip-link">@T["Skip to content"]</a>
     <header class="site-header">
-        <a class="brand" href="/" aria-label="ScanBack — @T["Home"]">
+        <a class="brand" href="@homeUrl" aria-label="ScanBack — @T["Home"]">
             <span class="brand-symbol" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="m8 12 3 3 5-6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
             <span>Scan<span class="brand-accent">Back</span></span>
         </a>
@@ -41,14 +74,14 @@
         else
         {
             <nav class="marketing-nav" aria-label="@T["Main navigation"]">
-                <a href="/#how-it-works">@T["How it works"]</a>
-                <a href="/#privacy-first">@T["Privacy first"]</a>
+                <a href="@(homeUrl + "/how-it-works")">@T["How it works"]</a>
+                <a href="@(homeUrl + "#privacy-first")">@T["Privacy first"]</a>
             </nav>
         }
         <div class="header-actions">
             <nav class="language-switch" aria-label="@T["Language"]">
-                <a class="@(!T.IsGreek ? "selected" : "")" href="@Url.Action("Language", "Home", new { culture = "en", returnUrl })" lang="en" aria-current="@(!T.IsGreek ? "true" : "false")">EN</a>
-                <a class="@(T.IsGreek ? "selected" : "")" href="@Url.Action("Language", "Home", new { culture = "el", returnUrl })" lang="el" aria-current="@(T.IsGreek ? "true" : "false")">ΕΛ</a>
+                <a class="@(!T.IsGreek ? "selected" : "")" href="@(seo?.LocalPath("en") ?? Url.Action("Language", "Home", new { culture = "en", returnUrl }))" lang="en" aria-current="@(!T.IsGreek ? "true" : "false")">EN</a>
+                <a class="@(T.IsGreek ? "selected" : "")" href="@(seo?.LocalPath("el") ?? Url.Action("Language", "Home", new { culture = "el", returnUrl }))" lang="el" aria-current="@(T.IsGreek ? "true" : "false")">ΕΛ</a>
             </nav>
             @if (!isEmergency)
             {
@@ -106,12 +139,12 @@
     }
     else
     {
-        <main id="main-content" class="@(controller.Equals("Home", StringComparison.OrdinalIgnoreCase) && ViewContext.RouteData.Values["action"]?.ToString() == "Index" ? "home-main" : "public-main")" tabindex="-1">
-            @if (TempData["Success"] is string message) { <div class="alert alert-success" role="status">@T[message]</div> }
-            @if (TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@T[error]</div> }
+        <main id="main-content" class="@(seo?.Slug == "" || (controller.Equals("Home", StringComparison.OrdinalIgnoreCase) && ViewContext.RouteData.Values["action"]?.ToString() == "Index") ? "home-main" : "public-main")" tabindex="-1">
+            @if (seo is null && TempData["Success"] is string message) { <div class="alert alert-success" role="status">@T[message]</div> }
+            @if (seo is null && TempData["Error"] is string error) { <div class="alert alert-danger" role="alert">@T[error]</div> }
             @RenderBody()
         </main>
-        <footer class="site-footer"><a class="footer-brand" href="/">ScanBack</a><span>© @DateTime.UtcNow.Year</span><a href="/privacy">@T["Privacy & data"]</a><span class="footer-note">@T["Made for the road ahead."]</span></footer>
+        <footer class="site-footer"><a class="footer-brand" href="@homeUrl">ScanBack</a><span>© @DateTime.UtcNow.Year</span><a href="/privacy">@T["Privacy & data"]</a><a href="@(homeUrl + "/qr-nfc-helmet-stickers")">QR &amp; NFC</a><a href="@(homeUrl + "/motorcycle-emergency-guide")">@(T.IsGreek ? "Οδηγός προετοιμασίας" : "Emergency preparation")</a><span class="footer-note">@T["Made for the road ahead."]</span></footer>
     }
     <script src="~/vendor/bootstrap/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>

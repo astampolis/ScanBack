@@ -26,7 +26,8 @@ public sealed class AccountFlowTests(SqlWebFixture fixture)
             ["Password"] = SqlWebFixture.Password,
             ["ConfirmPassword"] = SqlWebFixture.Password,
             ["FullName"] = "New rider",
-            ["PrivacyAccepted"] = "true"
+            ["PrivacyAccepted"] = "true",
+            ["privacyPolicyVersion"] = SqlWebFixture.PolicyVersion
         }));
         Assert.Equal(HttpStatusCode.Redirect, register.StatusCode);
         var user = await fixture.InDatabase(db => db.Users.AsNoTracking().SingleAsync(x => x.Email == email));
@@ -49,10 +50,48 @@ public sealed class AccountFlowTests(SqlWebFixture fixture)
         var confirmation = await fixture.InDatabase(db => db.OutboxMessages.AsNoTracking().SingleAsync(x => x.ToEmail == email && x.Kind == "Confirmation"));
         var link = Regex.Match(confirmation.Body, @"http://localhost/account/confirm-email\?[^\s]+").Value;
         Assert.NotEmpty(link);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(link)).StatusCode);
+        var preview = await client.GetAsync(link);
+        Assert.Equal(HttpStatusCode.OK, preview.StatusCode);
+        Assert.False(await fixture.InDatabase(db => db.Users.Where(x => x.Id == user.Id).Select(x => x.EmailConfirmed).SingleAsync()));
+        var previewHtml = await preview.Content.ReadAsStringAsync();
+        var confirmed = await client.PostAsync("/account/confirm-email", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] = SqlWebFixture.Hidden(previewHtml, "__RequestVerificationToken"),
+            ["userId"] = SqlWebFixture.Hidden(previewHtml, "userId"),
+            ["code"] = SqlWebFixture.Hidden(previewHtml, "code")
+        }));
+        Assert.Equal(HttpStatusCode.OK, confirmed.StatusCode);
         Assert.True(await fixture.InDatabase(db => db.Users.Where(x => x.Id == user.Id).Select(x => x.EmailConfirmed).SingleAsync()));
         await SqlWebFixture.Login(client, email);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/profile")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Changed_privacy_notice_requires_review_before_registration_or_health_consent_can_be_saved()
+    {
+        using var newcomer = fixture.Client();
+        var email = "stale-notice-" + Guid.NewGuid().ToString("N") + "@example.test";
+        var csrf = await SqlWebFixture.Antiforgery(newcomer, "/account/register");
+        var registration = await newcomer.PostAsync("/account/register", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] = csrf, ["Email"] = email,
+            ["Password"] = SqlWebFixture.Password, ["ConfirmPassword"] = SqlWebFixture.Password,
+            ["FullName"] = "Stale notice", ["PrivacyAccepted"] = "true", ["privacyPolicyVersion"] = "superseded-notice"
+        }));
+        Assert.Equal(HttpStatusCode.OK, registration.StatusCode);
+        Assert.False(await fixture.InDatabase(db => db.Users.AnyAsync(x => x.Email == email)));
+        var rider = await fixture.SeedRider(healthConsent: false);
+        using var owner = fixture.Client();
+        await SqlWebFixture.Login(owner, rider.Email);
+        csrf = await SqlWebFixture.Antiforgery(owner, "/profile/edit");
+        var edit = await owner.PostAsync("/profile/edit", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] = csrf, ["FullName"] = rider.Profile.FullName,
+            ["HealthConsent"] = "true", ["Allergies"] = "Consent must be current", ["consentPolicyVersion"] = "superseded-notice"
+        }));
+        Assert.Equal(HttpStatusCode.OK, edit.StatusCode);
+        Assert.False(await fixture.InDatabase(db => db.RiderProfiles.Where(x => x.Id == rider.Profile.Id).Select(x => x.HealthConsent).SingleAsync()));
+        Assert.False(await fixture.InDatabase(db => db.ConsentRecords.AnyAsync(x => x.UserId == rider.UserId && x.Action == "HealthConsentGranted")));
     }
 
     [Fact]
@@ -101,7 +140,8 @@ public sealed class AccountFlowTests(SqlWebFixture fixture)
             ["FullName"] = "Own profile updated",
             ["UserId"] = victim.UserId,
             ["Id"] = victim.Profile.Id.ToString(),
-            ["HealthConsent"] = "true"
+            ["HealthConsent"] = "true",
+            ["consentPolicyVersion"] = SqlWebFixture.PolicyVersion
         }));
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Equal("Own profile updated", await fixture.InDatabase(db => db.RiderProfiles.Where(x => x.UserId == owner.UserId).Select(x => x.FullName).SingleAsync()));
@@ -178,7 +218,11 @@ public sealed class AccountFlowTests(SqlWebFixture fixture)
         using var contactClient = fixture.Client();
         var confirmationCsrf = await SqlWebFixture.Antiforgery(contactClient, link);
         Assert.False(await fixture.InDatabase(db => db.EmergencyContacts.Where(x => x.Id == contact.Id).Select(x => x.IsVerified).SingleAsync()));
-        response = await contactClient.PostAsync(link, new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = confirmationCsrf }));
+        response = await contactClient.PostAsync(link, new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] = confirmationCsrf, ["PolicyVersion"] = SqlWebFixture.PolicyVersion,
+            ["AcceptNotifications"] = "true"
+        }));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.True(await fixture.InDatabase(db => db.EmergencyContacts.Where(x => x.Id == contact.Id).Select(x => x.IsVerified).SingleAsync()));
 
@@ -271,6 +315,7 @@ public sealed class AccountFlowTests(SqlWebFixture fixture)
             { new StringContent(csrf), "__RequestVerificationToken" },
             { new StringContent(rider.Profile.FullName), "FullName" },
             { new StringContent("true"), "HealthConsent" },
+            { new StringContent(SqlWebFixture.PolicyVersion), "consentPolicyVersion" },
             { new ByteArrayContent(data.ToArray()), "Photo", "camera.png" }
         };
         Assert.Equal(HttpStatusCode.Redirect, (await owner.PostAsync("/profile/edit", form)).StatusCode);
@@ -286,6 +331,7 @@ public sealed class AccountFlowTests(SqlWebFixture fixture)
             ["__RequestVerificationToken"] = csrf,
             ["FullName"] = rider.Profile.FullName,
             ["HealthConsent"] = "true",
+            ["consentPolicyVersion"] = SqlWebFixture.PolicyVersion,
             ["VisibleFields"] = "Photo"
         };
         Assert.Equal(HttpStatusCode.Redirect, (await owner.PostAsync("/profile/edit", new FormUrlEncodedContent(visibility))).StatusCode);

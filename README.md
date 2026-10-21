@@ -1,6 +1,6 @@
 # ScanBack
 
-A Greek/English, mobile-first motorcycle emergency identification MVP built with **ASP.NET Core MVC / .NET 10 LTS**, **SQL Server**, **Entity Framework Core**, and **ASP.NET Core Identity**. The frontend uses **Bootstrap (MIT)** and custom CSS: no paid UI license, Node build, React, Angular, or mobile app is required.
+A Greek/English, mobile-first motorcycle emergency identification application built with **ASP.NET Core MVC / .NET 10 LTS**, **SQL Server**, **Entity Framework Core**, and **ASP.NET Core Identity**. The frontend uses **Bootstrap (MIT)** and custom CSS: no paid UI license, Node build, React, Angular, or mobile app is required. Source, deployment scripts and configuration templates are editable.
 
 The sticker stores an HTTPS URL, never medical information. Anyone with a copy of that URL can see the fields the rider deliberately publishes. ScanBack does not dispatch emergency services, verify accidents, or diagnose injuries.
 
@@ -8,19 +8,19 @@ The sticker stores an HTTPS URL, never medical information. Anyone with a copy o
 
 - Registration, email confirmation, login, password reset, lockout, authenticator MFA and recovery codes.
 - Rider profile editing, explicit health-data consent, per-field public visibility, public preview, secure optional JPEG/PNG photos, consent withdrawal, JSON data export, and password-confirmed account deletion.
-- Emergency contacts with confirmation before notifications, private email addresses, optional public phone numbers, and unsubscribe links.
+- Emergency contacts with independent recipient consent for notifications and public phone publication, private email addresses, and unsubscribe links.
 - Multiple QR/NFC identifiers (up to ten), labels, activation/deactivation, permanent replacement, SVG/PNG downloads, and printable sticker sheets.
 - Anonymous emergency pages, prominent 112/166 dialing, and Greek/English safety reminders.
 - Explicit possible-accident reporting, optional permission-based GPS, manual landmarks, duplicate suppression, notification cooldowns, and per-source limits.
-- Incident-specific reporter sessions and separate expiring contact invitations, restricted location access, Google Maps links, email delivery status, and a rule-based dispatcher script.
-- Persistent encrypted notification outbox, SMTP with verified TLS for remote providers, bounded retries, and automatic incident/outbox/audit cleanup.
+- Incident-specific reporter sessions and separate expiring, single-use contact invitations, restricted location access, Google Maps links, email delivery status, and a rule-based dispatcher script.
+- Persistent notification outbox with encrypted message bodies, SMTP with verified TLS for remote providers, bounded retries, and automatic incident/outbox/audit cleanup.
 - MFA-protected administration of account/identifier status, limited incident metadata, delivery configuration, retention, and technical audit events. Administrators do not get medical-profile access.
 
 Optional SignalR chat, SMS, external AI, payments, physical sticker fulfilment, and extended incident reporting are **not part of this mandatory MVP**. No external AI receives health data.
 
 ## Local development
 
-Requires Docker, Python 3, Bash and ripgrep for the helper scripts. The pinned .NET SDK can be installed by `scripts/install.sh`. Windows developers can use WSL2 or the manual .NET commands below.
+Requires Docker, Python 3, OpenSSL, Bash and ripgrep for the helper scripts. The pinned .NET SDK can be installed by `scripts/install.sh`. Windows developers can use WSL2 or the manual .NET commands below.
 
 ```bash
 git clone https://github.com/astampolis/ScanBack.git
@@ -34,15 +34,18 @@ cd ScanBack
 
 If MCR image storage is restricted in a cloud environment, see [the verified SQL image fallback](docs/sql-server-development.md). Use the current checkout; a cloud task is already isolated and does not need another Git worktree.
 
-With an existing .NET 10 SDK and SQL Server, configure `ConnectionStrings__DefaultConnection`, `Site__BaseUrl`, and the mail settings instead, then:
+With an existing .NET 10 SDK and SQL Server, create an ignored `src/ScanBack.Web/appsettings.Local.json` containing the development SQL connection, `Site:BaseUrl`, mail settings, and **absolute** `Encryption:KeyDirectory` / `Storage:PhotoDirectory` paths. Use the same file for explicit initialization and the website:
 
 ```bash
 dotnet restore ScanBack.sln --locked-mode
 dotnet tool restore
+export SCANBACK_CONFIG_FILE="$(pwd)/src/ScanBack.Web/appsettings.Local.json"
+dotnet run --project src/ScanBack.Deployment -- migrate --environment Development --config "$SCANBACK_CONFIG_FILE"
+dotnet run --project src/ScanBack.Deployment -- initialize --environment Development --config "$SCANBACK_CONFIG_FILE"
 ASPNETCORE_ENVIRONMENT=Development dotnet run --project src/ScanBack.Web
 ```
 
-Development mode applies EF migrations on startup. Data Protection keys and uploaded photos are in ignored `src/ScanBack.Web/App_Data/` directories. Preserve the keys together with the database; losing them makes encrypted medical fields, notification bodies and stored sticker tokens unreadable. Local key files are suitable for development; production requires certificate protection.
+The helper scripts perform explicit development initialization too. Neither website nor worker applies migrations on startup. The development website hosts its local notification/retention workers; production uses the separate Windows service. Use the same key/photo paths across hosts and the same external JSON through `SCANBACK_CONFIG_FILE`. Development key files need filesystem protection; production also requires certificate protection. Preserve the keys together with the database; losing them makes encrypted medical fields, notification bodies and stored sticker tokens unreadable.
 
 ## Run the tests
 
@@ -75,17 +78,35 @@ No live emergency-service calls are needed for this demonstration. Use synthetic
 
 See [validation results and demonstration screenshots](docs/validation.md) for the flows exercised in the cloud instance.
 
-## Administrator provisioning
+## Windows Server / IIS deployment
 
-There is no hardcoded administrator password. Supply a strong password and email via secure environment configuration and explicitly provision:
+The supported production package targets **Windows Server 2022/2025 x64 + IIS 10 + the .NET 10 Hosting Bundle**, with SQL Server and a transactional SMTP provider. Build it from PowerShell 7 using the pinned SDK:
 
-```bash
-ASPNETCORE_ENVIRONMENT=Development dotnet run --project src/ScanBack.Web -- --provision-admin
+```powershell
+.\scripts\publish-iis.ps1
 ```
 
-This reads `Admin__Email` and `Admin__Password` from the environment; do not enter real values into shell history or commit them. Remove those bindings after provisioning. Existing accounts are not silently elevated or given a new password.
+The ZIP at `artifacts/iis/ScanBack-IIS-win-x64.zip` contains `Web` (in-process IIS), `Worker` (notification/retention Windows service), `Tools` (offline configuration validation, migrations and provisioning), configuration examples and PowerShell deployment scripts. [Follow the complete IIS installation guide](docs/iis-deployment.md) for SQL installation/licensing, trusted SQL TLS and least-privilege Windows identities, SMTP/SPF/DKIM/DMARC, your domain/certificates, protected key/photo directories, administrator MFA and acceptance checks. [Operations and recovery](docs/operations.md) covers upgrades, Identity-secret backfill, rollback, monitoring, key rotation and backup/deletion policy.
+
+On the target, copy the example into protected external `C:\ProgramData\ScanBack\config\appsettings.Production.json`, replace all placeholders, and run `Install-ScanBackIis.ps1` with your domain and HTTPS certificate thumbprint. It leaves hosts stopped until a separate migration operator runs `check-config`, `migrate`, `initialize` and `create-admin`. Then `Start-ScanBack.ps1` checks trusted HTTPS readiness. Configuration, Data Protection keys and uploaded photos stay outside the webroot; the application identities receive no schema-deployment permissions. No domain, real password, live certificate or provider account is included.
+
+The application is deployable source and tooling. Your actual IIS server, DNS, SQL trust chain, SMTP delivery, restore procedure and operator/legal details still require the documented target acceptance checks; Linux validation cannot establish a live Windows deployment.
+
+## Administrator provisioning
+
+There is no hardcoded administrator password. In development, supply a strong password and email via secure environment configuration and explicitly provision:
+
+```bash
+dotnet run --project src/ScanBack.Deployment -- create-admin --environment Development --config "$(pwd)/src/ScanBack.Web/appsettings.Local.json"
+```
+
+This reads `Admin__Email` and `Admin__Password` from the environment; do not enter real values into shell history or commit them. Remove those bindings after provisioning. Existing accounts are not silently elevated or given a new password. **In production use `Tools\ScanBack.Deployment.exe create-admin --config <external-file>` under the separate operator identity**, as described in the IIS guide. Provisioning is always an explicit CLI operation.
 
 Sign in with the administrator account, open Account security, enroll a TOTP authenticator, save the one-time recovery codes, and sign in again with MFA. `/admin` requires both the role and an MFA-authenticated session. Self-deactivation and removal of the last active administrator are prevented.
+
+## Public pages and search
+
+Public Greek/English product pages can be indexed. Rider, account, administration and capability URLs are excluded from discovery/indexing controls; a copied public capability can still reveal the fields its rider publishes. [SEO deployment guidance](docs/seo.md) explains the sitemap, robots policy and manual Search Console submission after setting the real production domain.
 
 ## Configuration and production
 
@@ -95,16 +116,18 @@ Production requires:
 
 - A real HTTPS `Site__BaseUrl`, matching `AllowedHosts`, TLS termination and explicitly trusted reverse proxies.
 - SQL Server/Azure SQL with a least-privilege application login, verified encrypted connections, encrypted storage/backups, and a tested recovery procedure. The application rejects production connections with certificate validation disabled.
-- A protected, persistent key directory and `Encryption__CertificatePath` plus its securely injected password. Store key backups separately and restrict access.
+- A protected, persistent `Encryption__KeyDirectory` and separate Data Protection certificate (`Encryption__CertificateThumbprint` in LocalMachine/My, or external `Encryption__CertificatePath` plus its securely injected password). Put `Storage__PhotoDirectory` outside the webroot. Preserve the full key ring and old certificates for decryption/restore.
 - A transactional SMTP provider. Remote SMTP uses STARTTLS (or implicit TLS on port 465) with normal certificate validation. Configure SPF, DKIM and DMARC at the provider/domain. A local Mailpit acceptance is not evidence of real-world deliverability.
-- Explicit migration execution under a separate deployment identity (`--migrate`) before running the production application. Production startup does not automatically apply migrations.
+- Explicit `Tools\ScanBack.Deployment.exe migrate` and `initialize` execution under a separate deployment identity before starting production hosts. Neither production website nor worker applies migrations or seeds the database on startup.
+- A separately installed and monitored `ScanBack.Worker` Windows service for delivery/retention; IIS app-pool lifetime does not drive background work.
+- Operator-specific `Privacy__ControllerName`, `Privacy__ContactEmail` and `Privacy__PolicyVersion`, approved notices and a documented backup expiry/deletion procedure.
 - Suitable incident/access/cooldown settings, monitoring, backups, privacy notices, operator contact information and legal review.
 
-The included Dockerfile is a production packaging example; live hosting, DNS, TLS certificates, provider accounts and legal approval must be configured for your deployment. No live production site is published by this repository.
+Use the Windows IIS package and [deployment guide](docs/iis-deployment.md) for the supported Windows layout. The included Dockerfile is an alternative web packaging example; it requires separate background-worker hosting and production configuration. Live hosting, DNS, TLS certificates, provider accounts and legal approval are configured for your deployment. No live production site is published by this repository.
 
 ## Architecture and database
 
-`ScanBack.Domain` contains the entities and visibility flags. `ScanBack.Infrastructure` contains Identity/EF persistence, protected-token handling, field encryption, SMTP delivery and background workers. `ScanBack.Web` contains MVC controllers, validated input models, explicit public projections and Razor UI. `ScanBack.Tests` exercises real SQL persistence and HTTP security boundaries.
+`ScanBack.Domain` contains the entities and visibility flags. `ScanBack.Application` contains public projections, consent/retention policies and notification/retention boundaries. `ScanBack.Infrastructure` implements Identity/EF persistence, encryption, SMTP and processing. `ScanBack.Web` contains MVC controllers, validated input models and Razor UI. `ScanBack.Worker` hosts production background work as a Windows service. `ScanBack.Deployment` provides explicit operator commands. `ScanBack.Tests` exercises real SQL persistence and HTTP security boundaries.
 
 EF migrations are in `src/ScanBack.Infrastructure/Migrations`. The initial migration creates Identity tables and `RiderProfiles`, `EmergencyContacts`, `EmergencyIdentifiers`, `Incidents`, `IncidentAccesses`, `OutboxMessages`, `ConsentRecords`, `AuditEvents`, and singleton `PlatformSettings`. Unique token/submission indexes and coordinate constraints reinforce application checks.
 
@@ -116,6 +139,8 @@ dotnet ef migrations script --idempotent --project src/ScanBack.Infrastructure -
 ## Privacy and delivery limits
 
 See [the security model](docs/security.md) and the in-app privacy notice. The notice is a technical draft requiring your legal/operator review before launch. Explicit consent and technical safeguards are not GDPR certification.
+
+Application field protection covers medical strings, stored capability copies, outbox bodies and Identity authenticator/recovery secrets after the required legacy backfill. Account/profile metadata (including birth dates), contact details, incident report/location fields and stored photos require database/disk and backup encryption plus restricted access. Preserve the complete key ring and historical wrapping certificates for recovery.
 
 Email delivery is at least once: a retry after an uncertain SMTP outcome can produce a duplicate. Status says **provider accepted**, never “contact informed” or “help dispatched.” Invitation possession authorizes access and can be forwarded; expiration/revocation limits that risk but cannot verify the recipient's real-world identity.
 

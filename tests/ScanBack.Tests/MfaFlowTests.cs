@@ -95,6 +95,27 @@ public sealed class MfaFlowTests(SqlWebFixture fixture)
         var html = await response.Content.ReadAsStringAsync();
         var codes = Regex.Matches(html, @"<li><code>([^<]+)</code></li>").Select(match => WebUtility.HtmlDecode(match.Groups[1].Value)).ToArray();
         Assert.Equal(10, codes.Length);
+        var storedTokens = await fixture.InDatabase(async db =>
+        {
+            await db.Database.OpenConnectionAsync();
+            await using var command = db.Database.GetDbConnection().CreateCommand();
+            command.CommandText = "SELECT Value FROM AspNetUserTokens WHERE UserId = @userId";
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@userId";
+            parameter.Value = rider.UserId;
+            command.Parameters.Add(parameter);
+            await using var rows = await command.ExecuteReaderAsync();
+            var values = new List<string>();
+            while (await rows.ReadAsync()) values.Add(rows.GetString(0));
+            return values;
+        });
+        Assert.NotEmpty(storedTokens);
+        Assert.All(storedTokens, stored =>
+        {
+            Assert.StartsWith("SBID1:", stored);
+            Assert.DoesNotContain(key, stored, StringComparison.Ordinal);
+            Assert.All(codes, code => Assert.DoesNotContain(code, stored, StringComparison.Ordinal));
+        });
         Assert.Equal(HttpStatusCode.Redirect, (await client.GetAsync("/profile")).StatusCode);
         return (key, codes);
     }

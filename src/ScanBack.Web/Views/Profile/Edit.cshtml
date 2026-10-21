@@ -1,7 +1,9 @@
 @model ProfileEditModel
+@inject Microsoft.Extensions.Options.IOptions<ScanBack.Infrastructure.Hosting.PrivacyOptions> Privacy
 @{ ViewData["Title"] = T["Edit emergency profile"]; }
 <div class="page-header"><div><span class="eyebrow">@T["YOUR INFORMATION"]</span><h1>@T["Edit emergency profile"]</h1><p>@T["Keep essential details current. All fields stay private unless you publish them below."]</p></div><a class="btn btn-outline" href="/profile">@T["Back to dashboard"]</a></div>
 <form asp-action="Edit" method="post" enctype="multipart/form-data">
+<input type="hidden" name="consentPolicyVersion" value="@Privacy.Value.PolicyVersion" />
 <div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
 <section class="card"><h2>@T["Personal details"]</h2><div class="form-grid">
 <div class="form-field"><label asp-for="FullName">@T["Full name"]</label><input asp-for="FullName" autocomplete="name" maxlength="180" /><span asp-validation-for="FullName"></span></div>
@@ -15,7 +17,7 @@
 <div class="form-field"><label asp-for="Medications">@T["Current medications"]</label><textarea asp-for="Medications" rows="3" maxlength="2000"></textarea><span asp-validation-for="Medications"></span></div>
 <div class="form-field"><label asp-for="OtherInformation">@T["Other relevant information"]</label><textarea asp-for="OtherInformation" rows="3" maxlength="2000"></textarea><span asp-validation-for="OtherInformation"></span></div>
 <div class="form-field"><label asp-for="Instructions">@T["Instructions for responders"]</label><textarea asp-for="Instructions" rows="3" maxlength="2000"></textarea><span asp-validation-for="Instructions"></span></div>
-</div><label class="check-label consent-box"><input asp-for="HealthConsent" /><span>@T["I explicitly consent to ScanBack storing and processing the health information I enter to support emergency assistance. I understand that publishing a field below makes it visible to anyone with my sticker link. I can withdraw consent and delete these health fields at any time."] <a href="/privacy">@T["Privacy notice"]</a></span></label><span asp-validation-for="HealthConsent"></span></section>
+</div><label class="check-label consent-box"><input asp-for="HealthConsent" /><span>@T[Privacy.Value.HealthConsentTextPublic] <a href="/privacy">@T["Privacy notice"]</a> (@Privacy.Value.PolicyVersion)</span></label><span asp-validation-for="HealthConsent"></span></section>
 <section class="card"><h2>@T["What a helmet scan reveals"]</h2><p>@T["Anyone who scans, photographs, or receives your sticker URL can see the selected fields. Unselected fields remain available only in your account."]</p><fieldset class="visibility-grid"><legend class="sr-only">@T["Public emergency fields"]</legend>
 @foreach (var field in Enum.GetValues<PublicFields>().Where(x => x != PublicFields.None))
 {

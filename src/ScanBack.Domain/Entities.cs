@@ -23,6 +23,7 @@ public sealed class RiderProfile
     public PublicFields PublicFields { get; set; } = PublicFields.None;
     public bool HealthConsent { get; set; }
     public DateTimeOffset? ConsentAt { get; set; }
+    public string? ConsentPolicyVersion { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public List<EmergencyContact> Contacts { get; set; } = [];
     public List<EmergencyIdentifier> Identifiers { get; set; } = [];
@@ -38,7 +39,13 @@ public sealed class EmergencyContact
     public string Email { get; set; } = "";
     public string Phone { get; set; } = "";
     public bool PublicPhone { get; set; }
+    public bool PublicPhoneRequested { get; set; }
+    public DateTimeOffset? PublicPhoneConsentedAt { get; set; }
+    public DateTimeOffset? NotificationsConsentedAt { get; set; }
+    public string? ConsentPolicyVersion { get; set; }
+    public Guid PermissionVersion { get; set; } = Guid.NewGuid();
     public bool NotifyEnabled { get; set; } = true;
+    public bool NotificationsRequested { get; set; } = true;
     public bool IsVerified { get; set; }
     public string VerificationTokenHash { get; set; } = "";
     public DateTimeOffset VerificationExpiresAt { get; set; }
@@ -53,6 +60,7 @@ public sealed class EmergencyIdentifier
     public string TokenHash { get; set; } = "";
     public string ProtectedToken { get; set; } = "";
     public bool IsActive { get; set; } = true;
+    public bool IsAdminBlocked { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? RevokedAt { get; set; }
 }
@@ -84,6 +92,8 @@ public sealed class IncidentAccess
     public Guid? EmergencyContactId { get; set; }
     public string Role { get; set; } = "Reporter";
     public string TokenHash { get; set; } = "";
+    public string? SessionTokenHash { get; set; }
+    public DateTimeOffset? InvitationConsumedAt { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public bool IsRevoked { get; set; }
 }
@@ -109,7 +119,8 @@ public sealed class ConsentRecord
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string UserId { get; set; } = "";
-    public string PolicyVersion { get; set; } = "2026-10-v1";
+    public string PolicyVersion { get; set; } = "";
+    public string ConsentText { get; set; } = "";
     public string Action { get; set; } = "Granted";
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

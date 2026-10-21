@@ -18,10 +18,8 @@ public sealed class MailOptions
     public bool Enabled { get; set; }
 }
 
-public interface IEmailSender
-{
-    Task SendAsync(string to, string subject, string body, CancellationToken cancellationToken = default);
-}
+// Retained for source compatibility; application code depends on the application boundary.
+public interface IEmailSender : ScanBack.Application.IEmailSender;
 
 public sealed class SmtpEmailSender(IOptionsMonitor<MailOptions> options) : IEmailSender
 {

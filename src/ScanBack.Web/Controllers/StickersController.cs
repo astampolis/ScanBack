@@ -61,6 +61,11 @@ public sealed class StickersController(AppDbContext db, TokenService tokens, Sit
         await using var transaction = await db.Database.BeginTransactionAsync(db.Database.IsSqlServer() ? IsolationLevel.ReadCommitted : IsolationLevel.Serializable);
         var identifier = await OwnedIdentifierForUpdate(id);
         if (identifier is null) return NotFound();
+        if (identifier.IsAdminBlocked)
+        {
+            TempData["Success"] = "This sticker was blocked by an administrator. Create a new sticker or contact support.";
+            return RedirectToAction(nameof(Index));
+        }
         identifier.IsActive = !identifier.IsActive;
         identifier.RevokedAt = identifier.IsActive ? null : DateTimeOffset.UtcNow;
         if (!identifier.IsActive) await RevokeIncidentAccess(id);
@@ -78,6 +83,11 @@ public sealed class StickersController(AppDbContext db, TokenService tokens, Sit
         await using var transaction = await db.Database.BeginTransactionAsync(db.Database.IsSqlServer() ? IsolationLevel.ReadCommitted : IsolationLevel.Serializable);
         var identifier = await OwnedIdentifierForUpdate(id);
         if (identifier is null) return NotFound();
+        if (identifier.IsAdminBlocked)
+        {
+            TempData["Success"] = "This sticker was blocked by an administrator. Create a new sticker or contact support.";
+            return RedirectToAction(nameof(Index));
+        }
         var token = TokenService.Generate();
         identifier.TokenHash = TokenService.Hash(token);
         identifier.ProtectedToken = tokens.Protect(token);
@@ -159,9 +169,9 @@ public sealed class StickersController(AppDbContext db, TokenService tokens, Sit
     private StickerViewModel ToView(EmergencyIdentifier identifier)
     {
         string? url = null;
-        try { url = links.Absolute("/e/" + Uri.EscapeDataString(tokens.Unprotect(identifier.ProtectedToken))); }
+        try { if (!identifier.IsAdminBlocked) url = links.Absolute("/e/" + Uri.EscapeDataString(tokens.Unprotect(identifier.ProtectedToken))); }
         catch (Exception exception) when (exception is CryptographicException or FormatException or ArgumentException) { }
-        return new StickerViewModel { Id = identifier.Id, Label = identifier.Label, IsActive = identifier.IsActive, CreatedAt = identifier.CreatedAt, EmergencyUrl = url };
+        return new StickerViewModel { Id = identifier.Id, Label = identifier.Label, IsActive = identifier.IsActive && !identifier.IsAdminBlocked, IsAdminBlocked = identifier.IsAdminBlocked, CreatedAt = identifier.CreatedAt, EmergencyUrl = url };
     }
 
     private async Task RevokeIncidentAccess(Guid identifierId)

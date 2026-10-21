@@ -28,7 +28,7 @@ public sealed class AdminController(AppDbContext db, UserManager<ApplicationUser
         {
             Accounts = await users.Users.CountAsync(cancellationToken),
             ActiveAccounts = await users.Users.CountAsync(x => x.IsActive, cancellationToken),
-            ActiveIdentifiers = await db.EmergencyIdentifiers.CountAsync(x => x.IsActive && x.RevokedAt == null, cancellationToken),
+            ActiveIdentifiers = await db.EmergencyIdentifiers.CountAsync(x => x.IsActive && !x.IsAdminBlocked && x.RevokedAt == null, cancellationToken),
             OpenIncidents = await db.Incidents.CountAsync(x => !x.IsClosed && x.ExpiresAt > now, cancellationToken),
             QueuedNotifications = await db.OutboxMessages.CountAsync(x => x.AcceptedAt == null && x.Attempts < MaximumNotificationAttempts, cancellationToken),
             AcceptedNotifications = await db.OutboxMessages.CountAsync(x => x.AcceptedAt != null, cancellationToken),
@@ -137,14 +137,20 @@ public sealed class AdminController(AppDbContext db, UserManager<ApplicationUser
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> RevokeIdentifier(Guid id, CancellationToken cancellationToken)
     {
-        var identifier = await db.EmergencyIdentifiers.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+        await using var transaction = await db.Database.BeginTransactionAsync(db.Database.IsSqlServer() ? IsolationLevel.ReadCommitted : IsolationLevel.Serializable, cancellationToken);
+        var identifier = db.Database.IsSqlServer()
+            ? await db.EmergencyIdentifiers.FromSqlInterpolated($"SELECT * FROM [EmergencyIdentifiers] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {id}").SingleOrDefaultAsync(cancellationToken)
+            : await db.EmergencyIdentifiers.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (identifier is null) return NotFound();
-        if (identifier.RevokedAt is null)
+        if (!identifier.IsAdminBlocked)
         {
             identifier.IsActive = false;
+            identifier.IsAdminBlocked = true;
             identifier.RevokedAt = DateTimeOffset.UtcNow;
+            foreach (var grant in await db.IncidentAccesses.Where(a => a.Incident.EmergencyIdentifierId == id && !a.IsRevoked).ToListAsync(cancellationToken)) grant.IsRevoked = true;
             await AuditAsync("Admin.IdentifierRevoked", id.ToString(), cancellationToken);
         }
+        await transaction.CommitAsync(cancellationToken);
         TempData["AdminSuccess"] = "Identifier permanently revoked. The rider can create a replacement.";
         return RedirectToAction(nameof(Identifiers));
     }

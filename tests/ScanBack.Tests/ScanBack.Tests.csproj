@@ -16,6 +16,7 @@
     </PackageReference>
     <ProjectReference Include="../../src/ScanBack.Web/ScanBack.Web.csproj" />
     <ProjectReference Include="../../src/ScanBack.Infrastructure/ScanBack.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/ScanBack.Deployment/ScanBack.Deployment.csproj" />
   </ItemGroup>
   <ItemGroup><Using Include="Xunit" /></ItemGroup>
 </Project>

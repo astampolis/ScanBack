@@ -94,6 +94,7 @@ public sealed class StickerViewModel
     public Guid Id { get; init; }
     public string Label { get; init; } = "";
     public bool IsActive { get; init; }
+    public bool IsAdminBlocked { get; init; }
     public DateTimeOffset CreatedAt { get; init; }
     public string? EmergencyUrl { get; init; }
 }

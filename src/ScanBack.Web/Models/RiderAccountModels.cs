@@ -68,8 +68,15 @@ public sealed class ContactTokenModel
 {
     public string Token { get; set; } = "";
     public string ContactName { get; set; } = "";
+    public string Relationship { get; set; } = "";
     public string RiderName { get; set; } = "";
     public bool Valid { get; set; }
+    public bool NotificationsRequested { get; set; }
+    public bool PublicPhoneRequested { get; set; }
+    public string Phone { get; set; } = "";
+    public bool AcceptNotifications { get; set; }
+    public bool AcceptPublicPhone { get; set; }
+    public string PolicyVersion { get; set; } = "";
 }
 public sealed class DeleteAccountModel
 {

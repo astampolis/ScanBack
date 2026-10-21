@@ -1,0 +1,12 @@
+@model ScanBack.Web.Controllers.EmailConfirmationInput
+@{ ViewData["Title"] = T["Confirm your email"]; }
+<section class="card auth-card">
+<h1>@T["Confirm your email"]</h1>
+<p>@T["Confirm this email address for your ScanBack account. You can sign in after confirming."]</p>
+<form action="/account/confirm-email" method="post">
+@Html.AntiForgeryToken()
+<input type="hidden" name="userId" value="@Model.UserId" />
+<input type="hidden" name="code" value="@Model.Code" />
+<button class="btn btn-primary" type="submit">@T["Confirm email address"]</button>
+</form>
+</section>

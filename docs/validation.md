@@ -1,47 +1,44 @@
 # Validation record
 
-Validated on 15 October 2026 (Europe/Athens) in the current cloud instance.
+Validated on **21 October 2026 (Europe/Athens)** in the cloud development environment.
 
 ## Build and database
 
-- .NET SDK 10.0.402 / runtime 10.0.13.
-- Real SQL Server 2022, Microsoft engine package 16.0.4305.5-1, on Ubuntu 22.04 in a development container.
-- Initial EF migration applied successfully. Application stop/restart and repeated setup succeeded without resetting data.
-- Frozen NuGet restore and Debug build succeeded with zero warnings and errors.
-- Release publish succeeded; generated SQL schema is in `docs/schema.sql`.
-- NuGet's configured advisory sources reported no known vulnerable direct or transitive packages at validation time.
+- .NET SDK 10.0.402 / runtime 10.0.13; frozen NuGet restore and full Debug build passed with zero warnings/errors.
+- Real SQL Server 2022, Microsoft engine package 16.0.4305.5-1, in a development container. Both EF migrations and explicit baseline initialization completed; repeated setup preserved existing settings.
+- SQL connections used mandatory TLS, `TrustServerCertificate=false` and an exact server-certificate pin with Microsoft.Data.SqlClient 6.1.7. Production-host tests retained this actual connection policy, without replacing the DbContext or disabling TLS validation.
+- The idempotent SQL script is in `docs/schema.sql`. New privacy migration preserves owner contact requests, clears legacy effective contact permissions and does not invent recipient consent.
+- NuGet advisory checks reported no known vulnerable direct or transitive packages at validation time.
 
 ## Automated checks
 
-`scripts/test.sh` executed **49 tests: 49 passed, 0 failed, 0 skipped**. This includes 11 unit tests and 38 real SQL Server/MVC integration cases. Each run creates/deletes a separate SQL database; production authentication, antiforgery and rate-limit behavior remain enabled.
+The final `scripts/test.sh` run executed **149 tests: 149 passed, 0 failed, 0 skipped**. The current report is ignored `artifacts/test-results/scanback.trx`.
 
-The suite covers public-field exclusion, consent withdrawal, raw SQL encryption checks, owner isolation, profile photo processing/privacy, registration confirmation, export/deletion, contact verification/email changes, QR download/replacement, GPS validation and Greek decimal binding, duplicate/concurrent reports, scoped invitation expiry/revocation, deactivated accounts, admin metadata/settings, actual TOTP enrollment/login and recovery-code reuse rejection.
+Coverage includes real SQL/HTTP registration and explicit email confirmation, profile visibility/consent withdrawal, encryption checks, owner isolation, secure photo processing, export/deletion, independent contact permissions and email changes, QR replacement/revocation, optional GPS validation, concurrent accident-report suppression, single-use incident invitations and concurrent redemption, admin blocking, TOTP enrollment/login and recovery-code reuse.
 
-The current TRX report is under ignored `artifacts/test-results/scanback.trx`. Background delivery/retention workers are removed from the HTTP test host to keep queued-message assertions deterministic.
+Production-specific checks start the actual Production web host with a real SQL login granted DML and explicitly denied DDL. Schema changes fail under that identity; the web starts, reads the emergency profile and readiness endpoint, creates no roles/settings/admin accounts and hosts no notification/retention workers. The suite also exercises actual SQL outbox leases/retries and authorization suppression, retention deletion, explicit deployment commands and idempotent backfill of 205 legacy Identity tokens.
 
-## Browser demonstration
+SEO checks cover all eight bilingual public pages, GET/HEAD, canonical URLs built from configuration, reciprocal language alternates, structured JSON, exact public sitemap membership, redirects, private headers and exclusion of authenticated rider details. Public editorial HTML supports gzip; account/CSRF responses remain uncompressed and no-store. Public brand assets are crawlable and cacheable.
 
-Chromium/Playwright exercised:
+## Runtime and delivery smoke checks
 
-1. Registration and real confirmation email received by the local Mailpit inbox.
-2. Login, explicit health consent, selected public fields, and upload of a real PNG photo.
-3. Contact creation and explicit email participation confirmation.
-4. Sticker/QR creation and anonymous emergency-page access.
-5. GPS requested only after a user gesture, with browser location permission mocked for the demonstration.
-6. Accident reporting, actual incident email received by Mailpit, reporter incident access, and a separate contact invitation/session.
-7. Provider-accepted notification status and an email containing unverified-report wording and a restricted invitation, without health contents or precise GPS.
+The real development web host returned healthy database readiness. Public English/Greek landing pages and articles returned indexable responses; accounts retained noindex/no-store. Explicit deployment CLI SMTP testing delivered a synthetic configuration-test email into the local Mailpit inbox. This proves local provider acceptance/capture, not external deliverability. Development startup now initializes explicitly through Tools rather than applying migrations in the website.
 
-Home, authentication, profile, stickers, emergency and incident pages were checked at 1440, 390 and 320 px widths. Final checks found no horizontal overflow or JavaScript/CSP errors. Mobile logout, the keyboard skip link and profile/emergency input labels were verified. Representative axe-core checks on home, registration and emergency pages at desktop/mobile widths found **zero serious or critical findings**; this is not a complete accessibility certification.
+## Windows deployment package
 
-Token-free synthetic demonstration screenshots:
+PowerShell deployment scripts parsed successfully. The framework-dependent win-x64 Web, Worker and Tools publish completed with frozen package locks and zero warnings/errors. The ZIP checksum, manifest hashes and Windows AMD64 executables were checked; private local configuration, key rings and uploaded data were excluded. Offline production CLI validation was exercised with a disposable protected PFX, including refusal of insecure configuration and refusal of unconfirmed production SMTP sending.
 
-- [Desktop homepage](screenshots/home-desktop.png)
-- [Mobile emergency page](screenshots/emergency-mobile.png)
+The scripts install IIS and a separate Windows worker with external configuration/data, restricted runtime identities and explicit operator-only migration/provisioning. Windows package CI is included. **Actual IIS installation, Windows service lifecycle and your production SQL/SMTP/DNS/certificates were not executed on this Linux host.** Complete the target acceptance procedure in [the IIS guide](iis-deployment.md).
 
-## Reusable environment
+## Browser evidence
 
-The official-package SQL fallback verifies Microsoft's pinned signing key, signed repository metadata and package SHA256, retaining Ubuntu package verification. It was run twice; the generated image archive was checksum-verified and loaded again successfully. The install/start configuration has been saved for environment review, including persisted SQL files and Data Protection keys.
+Current bilingual marketing pages/articles were checked in Chromium at desktop 1440 px and mobile 390 px: correct URL language, one H1, parsed structured data and no horizontal overflow. The public layout emits no account details, antiforgery secrets or cookies.
 
-## Limits of this evidence
+The earlier 15 October MVP browser demonstration exercised registration/mail capture, profile/photo editing, contact participation, QR access, gesture-requested mocked GPS, reporting and incident email/invitation access. Existing synthetic screenshots below are from that earlier version; they are not new evidence for the changed consent/invitation screens. Those changes are covered by the current SQL/HTTP suite.
 
-This validates the current local development instance. It does not establish production deployment, external email deliverability, a newly restored cloud task, legal/GDPR certification, or a full penetration test. Mailpit captures local email and does not send to real contacts. Live hosting, production SMTP, protected deployment keys, encryption/backups and operator/legal configuration must be completed before launch. The included Dockerfile and GitHub Actions workflow have not been executed on a production host or GitHub runner here.
+- [Earlier desktop homepage](screenshots/home-desktop.png)
+- [Earlier mobile emergency page](screenshots/emergency-mobile.png)
+
+## Limits
+
+These checks do not establish live production deployment, external email receipt, fresh-task cloud restoration, Google indexing/ranking, legal/GDPR certification, complete accessibility certification or a penetration test. No live emergency calls or messages were made. Legal/operator notice approval, hosting configuration, provider agreements, encrypted backups and a verified restore remain deployment responsibilities.

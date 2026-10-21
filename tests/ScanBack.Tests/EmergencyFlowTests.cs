@@ -213,6 +213,16 @@ public sealed class EmergencyFlowTests(SqlWebFixture fixture)
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
         Assert.DoesNotContain(rider.Profile.Conditions!, await page.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/incident/" + other.IncidentId)).StatusCode);
+        var consumed = await fixture.InDatabase(db => db.IncidentAccesses.AsNoTracking().SingleAsync(x => x.Id == incident.AccessId));
+        Assert.NotNull(consumed.InvitationConsumedAt);
+        Assert.NotNull(consumed.SessionTokenHash);
+        Assert.NotEqual(consumed.TokenHash, consumed.SessionTokenHash);
+        using var replay = fixture.Client();
+        Assert.Equal(HttpStatusCode.NotFound, (await replay.GetAsync("/incident/join/" + incident.Token)).StatusCode);
+        var replayCsrf = await SqlWebFixture.Antiforgery(replay, "/e/" + rider.Token);
+        Assert.Equal(HttpStatusCode.NotFound, (await replay.PostAsync("/incident/join/" + incident.Token, new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = replayCsrf }))).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await replay.GetAsync("/incident/" + incident.IncidentId)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/incident/" + incident.IncidentId)).StatusCode);
     }
 
     [Theory]
@@ -252,6 +262,26 @@ public sealed class EmergencyFlowTests(SqlWebFixture fixture)
         var existingSession = await client.GetAsync("/incident/" + incident.IncidentId);
         Assert.Equal(HttpStatusCode.NotFound, existingSession.StatusCode);
         Assert.DoesNotContain(rider.Profile.FullName, await existingSession.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Concurrent_invitation_redemption_grants_exactly_one_browser_a_session()
+    {
+        var rider = await fixture.SeedRider();
+        var incident = await fixture.SeedIncident(rider);
+        using var first = fixture.Client();
+        using var second = fixture.Client();
+        var path = "/incident/join/" + incident.Token;
+        var firstCsrf = await SqlWebFixture.Antiforgery(first, path);
+        var secondCsrf = await SqlWebFixture.Antiforgery(second, path);
+        var responses = await Task.WhenAll(
+            first.PostAsync(path, new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = firstCsrf })),
+            second.PostAsync(path, new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = secondCsrf })));
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Redirect);
+        Assert.Single(responses, response => response.StatusCode == HttpStatusCode.NotFound);
+        var pages = await Task.WhenAll(first.GetAsync("/incident/" + incident.IncidentId), second.GetAsync("/incident/" + incident.IncidentId));
+        Assert.Single(pages, response => response.StatusCode == HttpStatusCode.OK);
+        Assert.Single(pages, response => response.StatusCode == HttpStatusCode.NotFound);
     }
 
     private static FormUrlEncodedContent ReportContent(string submission, string? csrf, string? latitude = null, string? longitude = null)

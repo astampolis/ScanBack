@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ScanBack.Domain;
@@ -30,6 +31,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, IDataPr
         var messageProtector = dataProtectionProvider.CreateProtector("ScanBack.OutboxBodies.v1");
         var messageConverter = new ValueConverter<string, string>(
             value => messageProtector.Protect(value), value => messageProtector.Unprotect(value));
+        var identityProtector = dataProtectionProvider.CreateProtector("ScanBack.IdentityTokens.v1");
+        // Identity stores authenticator keys and recovery codes in AspNetUserTokens.Value.
+        // Prefixing allows an explicit deployment backfill of legacy plaintext rows without
+        // breaking recovery before that operation. New and rotated values are always protected.
+        var identityConverter = new ValueConverter<string?, string?>(
+            value => value == null ? null : "SBID1:" + identityProtector.Protect(value),
+            value => value == null ? null : value.StartsWith("SBID1:") ? identityProtector.Unprotect(value.Substring(6)) : value);
+        builder.Entity<IdentityUserToken<string>>().Property(x => x.Value).HasConversion(identityConverter);
 
         builder.Entity<RiderProfile>(entity =>
         {
@@ -37,6 +46,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, IDataPr
             entity.Property(x => x.UserId).HasMaxLength(450);
             entity.Property(x => x.FullName).HasMaxLength(180);
             entity.Property(x => x.PhotoFileName).HasMaxLength(200);
+            entity.Property(x => x.ConsentPolicyVersion).HasMaxLength(64);
             entity.HasOne<ApplicationUser>().WithOne().HasForeignKey<RiderProfile>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
             entity.Property(x => x.BloodType).HasConversion(healthConverter).HasColumnType("nvarchar(max)");
             entity.Property(x => x.Allergies).HasConversion(healthConverter).HasColumnType("nvarchar(max)");
@@ -52,6 +62,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, IDataPr
             entity.Property(x => x.Relationship).HasMaxLength(80);
             entity.Property(x => x.Email).HasMaxLength(254);
             entity.Property(x => x.Phone).HasMaxLength(40);
+            entity.Property(x => x.ConsentPolicyVersion).HasMaxLength(64);
             entity.Property(x => x.VerificationTokenHash).HasMaxLength(64).IsUnicode(false);
             entity.HasIndex(x => x.VerificationTokenHash).IsUnique().HasFilter("[VerificationTokenHash] <> ''");
             entity.HasOne(x => x.RiderProfile).WithMany(x => x.Contacts).HasForeignKey(x => x.RiderProfileId).OnDelete(DeleteBehavior.Cascade);
@@ -88,6 +99,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, IDataPr
             entity.Property(x => x.Role).HasMaxLength(32);
             entity.Property(x => x.TokenHash).HasMaxLength(64).IsUnicode(false);
             entity.HasIndex(x => x.TokenHash).IsUnique();
+            entity.Property(x => x.SessionTokenHash).HasMaxLength(64).IsUnicode(false);
+            entity.HasIndex(x => x.SessionTokenHash).IsUnique().HasFilter("[SessionTokenHash] IS NOT NULL");
             entity.HasIndex(x => x.ExpiresAt);
             entity.HasOne(x => x.Incident).WithMany(x => x.AccessGrants).HasForeignKey(x => x.IncidentId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<EmergencyContact>().WithMany().HasForeignKey(x => x.EmergencyContactId).OnDelete(DeleteBehavior.NoAction);
@@ -111,6 +124,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, IDataPr
         {
             entity.Property(x => x.UserId).HasMaxLength(450);
             entity.Property(x => x.PolicyVersion).HasMaxLength(64);
+            entity.Property(x => x.ConsentText).HasMaxLength(4000);
             entity.Property(x => x.Action).HasMaxLength(64);
             entity.HasIndex(x => new { x.UserId, x.CreatedAt });
             entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);

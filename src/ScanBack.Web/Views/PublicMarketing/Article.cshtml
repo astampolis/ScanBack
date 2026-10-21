@@ -1,0 +1,52 @@
+@model PublicMarketingPage
+@{
+    var home = "/" + Model.Seo.Language;
+    var greek = Model.IsGreek;
+}
+<article class="marketing-article">
+    <nav class="marketing-breadcrumb" aria-label="@(greek ? "Διαδρομή πλοήγησης" : "Breadcrumb")"><a href="@home">@(greek ? "Αρχική" : "Home")</a><span aria-hidden="true">/</span><span aria-current="page">@Model.Heading</span></nav>
+    <header class="marketing-article-header">
+        <span class="eyebrow">@(greek ? "SCANBACK · ΠΡΙΝ ΑΠΟ ΤΗ ΔΙΑΔΡΟΜΗ" : "SCANBACK · BEFORE THE RIDE")</span>
+        <h1>@Model.Heading</h1>
+        <p class="marketing-introduction">@Model.Introduction</p>
+    </header>
+    <div class="marketing-reading">
+        @foreach (var contentSection in Model.Sections)
+        {
+            <section>
+                <h2>@contentSection.Heading</h2>
+                @foreach (var paragraph in contentSection.Paragraphs)
+                {
+                    <p>@paragraph</p>
+                }
+                @if (contentSection.Steps is { Count: > 0 })
+                {
+                    <ul>
+                        @foreach (var step in contentSection.Steps)
+                        {
+                            <li>@step</li>
+                        }
+                    </ul>
+                }
+            </section>
+        }
+        @if (Model.Seo.Slug == "motorcycle-emergency-guide")
+        {
+            <section class="marketing-official-sources">
+                <h2>@(greek ? "Επίσημη ενημέρωση" : "Official information")</h2>
+                <p>@(greek ? "Συμβουλευτείτε τις αρμόδιες υπηρεσίες για τρέχουσες πληροφορίες:" : "Check the responsible services for current information:") <a href="https://civilprotection.gov.gr/en/112">112 · @(greek ? "Πολιτική Προστασία" : "Greek Civil Protection")</a> · <a href="https://www.ekab.gr/">166 · @(greek ? "ΕΚΑΒ" : "EKAB")</a>.</p>
+                <div class="button-row"><a class="btn btn-danger" href="tel:112">@(greek ? "Κλήση 112" : "Call 112")</a><a class="btn btn-secondary" href="tel:166">@(greek ? "Κλήση 166 · ΕΚΑΒ" : "Call 166 · EKAB")</a></div>
+            </section>
+        }
+    </div>
+    <aside class="marketing-next" aria-label="@(greek ? "Σχετικές πληροφορίες" : "Related information")">
+        <h2>@(greek ? "Προετοιμαστείτε για την επόμενη διαδρομή" : "Prepare for the next ride")</h2>
+        <nav class="marketing-related">
+            @if (Model.Seo.Slug != "how-it-works") { <a href="@(home + "/how-it-works")">@(greek ? "Πώς λειτουργεί το ScanBack" : "How ScanBack works") <span aria-hidden="true">→</span></a> }
+            @if (Model.Seo.Slug != "qr-nfc-helmet-stickers") { <a href="@(home + "/qr-nfc-helmet-stickers")">@(greek ? "Αυτοκόλλητα QR και ετικέτες NFC για κράνη" : "QR and NFC helmet stickers") <span aria-hidden="true">→</span></a> }
+            @if (Model.Seo.Slug != "motorcycle-emergency-guide") { <a href="@(home + "/motorcycle-emergency-guide")">@(greek ? "Προετοιμασία έκτακτης ανάγκης στην Ελλάδα" : "Emergency preparation in Greece") <span aria-hidden="true">→</span></a> }
+            <a href="/privacy">@(greek ? "Απόρρητο και επιλογές κοινοποίησης" : "Privacy and sharing choices") <span aria-hidden="true">→</span></a>
+        </nav>
+        <a class="btn btn-primary" href="/account/register">@T["Create my rider profile"] <span aria-hidden="true">→</span></a>
+    </aside>
+</article>

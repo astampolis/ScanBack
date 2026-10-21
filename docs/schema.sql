@@ -1,4 +1,4 @@
-﻿IF OBJECT_ID(N'[__EFMigrationsHistory]') IS NULL
+IF OBJECT_ID(N'[__EFMigrationsHistory]') IS NULL
 BEGIN
     CREATE TABLE [__EFMigrationsHistory] (
         [MigrationId] nvarchar(150) NOT NULL,
@@ -534,6 +534,128 @@ IF NOT EXISTS (
 BEGIN
     INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
     VALUES (N'20261014214153_InitialCreate', N'10.0.13');
+END;
+
+COMMIT;
+GO
+
+BEGIN TRANSACTION;
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261021080733_ProductionPrivacyControls'
+)
+BEGIN
+    ALTER TABLE [RiderProfiles] ADD [ConsentPolicyVersion] nvarchar(64) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261021080733_ProductionPrivacyControls'
+)
+BEGIN
+    ALTER TABLE [IncidentAccesses] ADD [InvitationConsumedAt] datetimeoffset NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261021080733_ProductionPrivacyControls'
+)
+BEGIN
+    ALTER TABLE [IncidentAccesses] ADD [SessionTokenHash] varchar(64) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261021080733_ProductionPrivacyControls'
+)
+BEGIN
+    ALTER TABLE [EmergencyIdentifiers] ADD [IsAdminBlocked] bit NOT NULL DEFAULT CAST(0 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261021080733_ProductionPrivacyControls'
+)
+BEGIN
+    ALTER TABLE [EmergencyContacts] ADD [ConsentPolicyVersion] nvarchar(64) NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261021080733_ProductionPrivacyControls'
+)
+BEGIN
+    ALTER TABLE [EmergencyContacts] ADD [NotificationsConsentedAt] datetimeoffset NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261021080733_ProductionPrivacyControls'
+)
+BEGIN
+    ALTER TABLE [EmergencyContacts] ADD [NotificationsRequested] bit NOT NULL DEFAULT CAST(0 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261021080733_ProductionPrivacyControls'
+)
+BEGIN
+    ALTER TABLE [EmergencyContacts] ADD [PermissionVersion] uniqueidentifier NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261021080733_ProductionPrivacyControls'
+)
+BEGIN
+    ALTER TABLE [EmergencyContacts] ADD [PublicPhoneConsentedAt] datetimeoffset NULL;
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261021080733_ProductionPrivacyControls'
+)
+BEGIN
+    ALTER TABLE [EmergencyContacts] ADD [PublicPhoneRequested] bit NOT NULL DEFAULT CAST(0 AS bit);
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261021080733_ProductionPrivacyControls'
+)
+BEGIN
+    ALTER TABLE [ConsentRecords] ADD [ConsentText] nvarchar(4000) NOT NULL DEFAULT N'';
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261021080733_ProductionPrivacyControls'
+)
+BEGIN
+    UPDATE [EmergencyContacts]
+    SET [NotificationsRequested] = [NotifyEnabled],
+        [PublicPhoneRequested] = [PublicPhone],
+        [NotifyEnabled] = 0,
+        [PublicPhone] = 0,
+        [PermissionVersion] = NEWID();
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261021080733_ProductionPrivacyControls'
+)
+BEGIN
+    EXEC(N'CREATE UNIQUE INDEX [IX_IncidentAccesses_SessionTokenHash] ON [IncidentAccesses] ([SessionTokenHash]) WHERE [SessionTokenHash] IS NOT NULL');
+END;
+
+IF NOT EXISTS (
+    SELECT * FROM [__EFMigrationsHistory]
+    WHERE [MigrationId] = N'20261021080733_ProductionPrivacyControls'
+)
+BEGIN
+    INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+    VALUES (N'20261021080733_ProductionPrivacyControls', N'10.0.13');
 END;
 
 COMMIT;

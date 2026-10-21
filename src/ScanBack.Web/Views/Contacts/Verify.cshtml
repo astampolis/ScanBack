@@ -1,3 +1,29 @@
 @model ContactTokenModel
 @{ ViewData["Title"] = T["Confirm emergency contact"]; }
-<section class="auth-shell compact"><div class="card auth-card"><h1>@T["Confirm emergency contact"]</h1>@if (Model.Valid) { <p><strong>@Model.RiderName</strong> @T["has invited you to be an emergency contact."]</p><p>@T["Confirming allows ScanBack to email you when someone reports a possible accident for this rider. A report is not independently verified and does not contact emergency services."]</p><form asp-action="VerifyConfirmed" asp-route-token="@Model.Token" method="post"><button class="btn btn-primary" type="submit">@T["Confirm my email and participation"]</button></form> } else { <p>@T["This invitation is invalid, expired, or already used. Ask the rider to send a new confirmation email."]</p> }</div></section>
+<section class="auth-shell compact"><div class="card auth-card">
+<h1>@T["Confirm emergency contact"]</h1>
+@if (Model.Valid)
+{
+    <p><strong>@Model.RiderName</strong> @T["has invited you to be an emergency contact."]</p>
+    <p>@T["Choose each permission separately. Leaving a box unchecked declines that permission."]</p>
+    <form asp-action="VerifyConfirmed" asp-route-token="@Model.Token" method="post">
+        <div asp-validation-summary="ModelOnly" class="validation-summary" role="alert"></div>
+        <input type="hidden" name="PolicyVersion" value="@Model.PolicyVersion" />
+        @if (Model.NotificationsRequested)
+        {
+            <label class="check-label"><input asp-for="AcceptNotifications" /> @T["I agree to receive emails when someone reports a possible accident for this rider. Reports are unverified and ScanBack does not contact emergency services."]</label>
+        }
+        @if (Model.PublicPhoneRequested)
+        {
+            <p><strong>@T["Requested public contact details"]:</strong> @Model.ContactName · @Model.Relationship · @Model.Phone</p>
+            <label class="check-label"><input asp-for="AcceptPublicPhone" /> @T["I explicitly agree to publish this phone number, my name and relationship on this rider's emergency page. Anyone who scans, photographs, or receives the sticker link may see and call this number."]</label>
+        }
+        <p class="field-help">@T["You can withdraw both permissions using the unsubscribe link in the invitation email. Changing the phone number requires new permission before it is shown."]</p>
+        <button class="btn btn-primary" type="submit">@T["Confirm my email and save my choices"]</button>
+    </form>
+}
+else
+{
+    <p>@T["This invitation is invalid, expired, or already used. Ask the rider to send a new confirmation email."]</p>
+}
+</div></section>

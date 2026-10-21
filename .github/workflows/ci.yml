@@ -2,6 +2,7 @@ name: Build and test
 on:
   push:
   pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -28,3 +29,69 @@ jobs:
       - name: Stop development services
         if: always()
         run: docker stop scanback-sql scanback-mail || true
+  windows-package:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Parse deployment scripts with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $failed = $false
+          Get-ChildItem deploy -Filter *.ps1 | ForEach-Object {
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count) { $parseErrors | Format-List; $failed = $true }
+          }
+          if ($failed) { throw 'Deployment script parse failed.' }
+      - name: Publish framework-dependent Windows package
+        shell: pwsh
+        run: ./scripts/publish-iis.ps1
+      - name: Verify Windows artifact and offline production configuration
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $package = Join-Path $env:RUNNER_TEMP 'ScanBack-package'
+          Expand-Archive artifacts/iis/ScanBack-IIS-win-x64.zip $package
+          . ./deploy/ScanBack.Common.ps1
+          Assert-Package $package
+          [xml]$web = Get-Content (Join-Path $package 'Web/web.config') -Raw
+          if ($web.configuration.location.'system.webServer'.aspNetCore.hostingModel -ne 'inprocess') { throw 'Wrong IIS hosting model.' }
+          $runtime = Join-Path $env:RUNNER_TEMP 'ScanBack-ci-data'
+          New-Item -ItemType Directory $runtime | Out-Null
+          $cert = New-SelfSignedCertificate -Subject 'CN=ScanBack-CI-DataProtection' -CertStoreLocation 'Cert:\LocalMachine\My' -KeyAlgorithm RSA -KeyLength 2048
+          try {
+            $config = Get-Content deploy/appsettings.Production.example.json -Raw | ConvertFrom-Json
+            $config.Site.BaseUrl = 'https://scanback.example.org'
+            $config.AllowedHosts = 'scanback.example.org'
+            $config.ConnectionStrings.DefaultConnection = 'Server=localhost;Database=ScanBack;Integrated Security=True;Encrypt=True;TrustServerCertificate=False'
+            $config.Encryption.KeyDirectory = Join-Path $runtime 'keys'
+            $config.Encryption.CertificateThumbprint = $cert.Thumbprint
+            $config.Storage.PhotoDirectory = Join-Path $runtime 'photos'
+            $config.Mail.Host = 'smtp.example.org'
+            $config.Mail.FromEmail = 'alerts@example.org'
+            $config.Mail.Username = 'ci-offline-only'
+            $config.Mail.Password = [Guid]::NewGuid().ToString('N')
+            $config.Privacy.ControllerName = 'CI synthetic operator'
+            $config.Privacy.ContactEmail = 'privacy@example.org'
+            $config.Privacy.PolicyVersion = 'ci-1'
+            $configPath = Join-Path $runtime 'appsettings.Production.json'
+            $config | ConvertTo-Json -Depth 8 | Set-Content $configPath -Encoding UTF8
+            & (Join-Path $package 'Tools/ScanBack.Deployment.exe') check-config --config $configPath --environment Production
+            if ($LASTEXITCODE -ne 0) { throw 'Valid offline production configuration was rejected.' }
+            $config.Site.BaseUrl = 'http://scanback.example.org'
+            $config | ConvertTo-Json -Depth 8 | Set-Content $configPath -Encoding UTF8
+            & (Join-Path $package 'Tools/ScanBack.Deployment.exe') check-config --config $configPath --environment Production
+            if ($LASTEXITCODE -eq 0) { throw 'Insecure production URL was accepted.' }
+          } finally { Remove-Item $cert.PSPath -Force }
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScanBack-IIS-win-x64
+          path: |
+            artifacts/iis/ScanBack-IIS-win-x64.zip
+            artifacts/iis/ScanBack-IIS-win-x64.zip.sha256
+          retention-days: 14

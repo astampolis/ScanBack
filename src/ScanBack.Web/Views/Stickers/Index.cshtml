@@ -19,7 +19,11 @@
 {
     <section class="card sticker-card">
         <div class="section-heading"><div><h2>@sticker.Label</h2><p class="field-help">@T["Created"] @TimeZoneInfo.ConvertTime(sticker.CreatedAt, TimeZoneInfo.FindSystemTimeZoneById("Europe/Athens")).ToString("dd MMM yyyy")</p></div><span class="badge @(sticker.IsActive ? "badge-success" : "badge-muted")">@T[sticker.IsActive ? "Active" : "Inactive"]</span></div>
-        @if (sticker.EmergencyUrl is not null)
+        @if (sticker.IsAdminBlocked)
+        {
+            <p class="alert alert-warning">@T["This sticker was blocked by an administrator. Create a new sticker or contact support."]</p>
+        }
+        else if (sticker.EmergencyUrl is not null)
         {
             <div class="sticker-content">
                 <img class="qr-preview" src="/stickers/@sticker.Id/qr.png" alt="@T["QR code for this emergency sticker"]" width="180" height="180" loading="lazy" />
@@ -31,10 +35,13 @@
         {
             <p class="alert alert-warning">@T["The stored sticker link cannot be recovered. Replace this sticker to create a new secure link."]</p>
         }
+        @if (!sticker.IsAdminBlocked)
+        {
         <div class="sticker-actions">
             <form method="post" action="/stickers/@sticker.Id/toggle">@Html.AntiForgeryToken()<button class="btn btn-secondary" type="submit">@T[sticker.IsActive ? "Deactivate sticker" : "Activate sticker"]</button></form>
             <details><summary>@T["Replace this sticker"]</summary><p>@T["Replacing invalidates the current QR code, NFC URL, and existing incident invitations. You must print the new code and reprogram the NFC sticker."]</p><form method="post" action="/stickers/@sticker.Id/replace">@Html.AntiForgeryToken()<button class="btn btn-danger" type="submit">@T["Replace and invalidate old link"]</button></form></details>
         </div>
+        }
     </section>
 }
 <p class="field-help">@T["ScanBack does not supply or program physical NFC hardware. Test printed QR codes at their final size and follow helmet manufacturer guidance before attaching a sticker."]</p>

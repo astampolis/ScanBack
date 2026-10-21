@@ -3,5 +3,6 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <NuGetAuditMode>all</NuGetAuditMode>
     <Deterministic>true</Deterministic>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 </Project>

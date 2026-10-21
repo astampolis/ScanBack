@@ -1,21 +1,26 @@
+using System.Data;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using ScanBack.Domain;
 using ScanBack.Infrastructure;
+using ScanBack.Infrastructure.Hosting;
 using ScanBack.Web.Models;
+using ScanBack.Web.Services;
 using SkiaSharp;
 
 namespace ScanBack.Web.Controllers;
 
 [Authorize, Route("profile")]
-public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn, TokenService tokens, IWebHostEnvironment environment) : Controller
+public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUser> users, SignInManager<ApplicationUser> signIn, TokenService tokens, IWebHostEnvironment environment, IConfiguration configuration, IOptions<PrivacyOptions> privacy, UiText text) : Controller
 {
     private string UserId => User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-    private string PhotoDirectory => Path.Combine(environment.ContentRootPath, "App_Data", "photos");
+    private string PhotoDirectory => Path.GetFullPath(configuration["Storage:PhotoDirectory"] ?? Path.Combine(environment.ContentRootPath, "App_Data", "photos"), environment.ContentRootPath);
     private const PublicFields HealthFields = PublicFields.BloodType | PublicFields.Allergies | PublicFields.Conditions | PublicFields.Medications | PublicFields.OtherInformation | PublicFields.Instructions;
     private static readonly string[] BloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
@@ -25,7 +30,7 @@ public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUs
         var profile = await db.RiderProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == UserId);
         if (profile is null) return RedirectToAction(nameof(Edit));
         var identifiers = await db.EmergencyIdentifiers.AsNoTracking().Where(x => x.RiderProfileId == profile.Id).OrderByDescending(x => x.CreatedAt).ToListAsync();
-        var first = identifiers.FirstOrDefault(x => x.IsActive);
+        var first = identifiers.FirstOrDefault(x => x.IsActive && !x.IsAdminBlocked && x.RevokedAt == null);
         string? preview = null;
         if (first is not null)
         {
@@ -45,14 +50,24 @@ public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUs
     public async Task<IActionResult> Edit()
     {
         var profile = await db.RiderProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == UserId);
-        return View(profile is null ? new ProfileEditModel() : ToModel(profile));
+        var model = profile is null ? new ProfileEditModel() : ToModel(profile);
+        // A changed notice needs a new affirmative choice; an old checkbox cannot grant consent to new wording.
+        if (profile is not null && profile.ConsentPolicyVersion != privacy.Value.PolicyVersion) model.HealthConsent = false;
+        return View(model);
     }
 
     [HttpPost("edit"), ValidateAntiForgeryToken, RequestSizeLimit(2_200_000)]
-    public async Task<IActionResult> Edit(ProfileEditModel model)
+    public async Task<IActionResult> Edit(ProfileEditModel model, string? consentPolicyVersion = null)
     {
-        var profile = await db.RiderProfiles.FirstOrDefaultAsync(x => x.UserId == UserId);
+        await using var transaction = await db.Database.BeginTransactionAsync(db.Database.IsSqlServer() ? IsolationLevel.ReadCommitted : IsolationLevel.Serializable);
+        var profile = await OwnProfileForUpdate();
         model.HasPhoto = profile?.PhotoFileName is not null;
+        if (model.HealthConsent && consentPolicyVersion != privacy.Value.PolicyVersion)
+        {
+            ModelState.Remove(nameof(model.HealthConsent));
+            model.HealthConsent = false;
+            ModelState.AddModelError(nameof(model.HealthConsent), "The privacy notice changed. Review the current notice and confirm your health-data choice again.");
+        }
         if (model.DateOfBirth > DateOnly.FromDateTime(DateTime.UtcNow) || model.DateOfBirth < DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-150)))
             ModelState.AddModelError(nameof(model.DateOfBirth), "Enter a valid date of birth in the past.");
         model.BloodType = Clean(model.BloodType);
@@ -91,10 +106,11 @@ public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUs
             await System.IO.File.WriteAllBytesAsync(Path.Combine(PhotoDirectory, profile.PhotoFileName), photoBytes);
         }
         else if (model.RemovePhoto) profile.PhotoFileName = null;
-        if (profile.HealthConsent != model.HealthConsent)
+        if (profile.HealthConsent != model.HealthConsent || (model.HealthConsent && profile.ConsentPolicyVersion != privacy.Value.PolicyVersion))
         {
-            db.ConsentRecords.Add(new ConsentRecord { UserId = UserId, Action = model.HealthConsent ? "HealthConsentGranted" : "HealthConsentWithdrawn" });
+            db.ConsentRecords.Add(new ConsentRecord { UserId = UserId, PolicyVersion = privacy.Value.PolicyVersion, ConsentText = text[privacy.Value.HealthConsentTextPublic], Action = model.HealthConsent ? "HealthConsentGranted" : "HealthConsentWithdrawn" });
             profile.ConsentAt = model.HealthConsent ? DateTimeOffset.UtcNow : null;
+            profile.ConsentPolicyVersion = model.HealthConsent ? privacy.Value.PolicyVersion : null;
         }
         profile.FullName = model.FullName.Trim();
         profile.DateOfBirth = model.DateOfBirth;
@@ -108,7 +124,11 @@ public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUs
         profile.PublicFields = selected;
         profile.UpdatedAt = DateTimeOffset.UtcNow;
         Audit("ProfileUpdated", profile.Id);
-        try { await db.SaveChangesAsync(); }
+        try
+        {
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
         catch
         {
             if (profile.PhotoFileName != oldPhoto) DeletePhoto(profile.PhotoFileName);
@@ -122,16 +142,19 @@ public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUs
     [HttpPost("withdraw-consent"), ValidateAntiForgeryToken]
     public async Task<IActionResult> WithdrawConsent()
     {
-        var profile = await db.RiderProfiles.FirstOrDefaultAsync(x => x.UserId == UserId);
+        await using var transaction = await db.Database.BeginTransactionAsync(db.Database.IsSqlServer() ? IsolationLevel.ReadCommitted : IsolationLevel.Serializable);
+        var profile = await OwnProfileForUpdate();
         if (profile is null) return NotFound();
         profile.BloodType = profile.Allergies = profile.Conditions = profile.Medications = profile.OtherInformation = profile.Instructions = null;
         profile.HealthConsent = false;
         profile.ConsentAt = null;
+        profile.ConsentPolicyVersion = null;
         profile.PublicFields &= ~HealthFields;
         profile.UpdatedAt = DateTimeOffset.UtcNow;
-        db.ConsentRecords.Add(new ConsentRecord { UserId = UserId, Action = "HealthConsentWithdrawn" });
+        db.ConsentRecords.Add(new ConsentRecord { UserId = UserId, PolicyVersion = privacy.Value.PolicyVersion, ConsentText = text[privacy.Value.HealthConsentTextPublic], Action = "HealthConsentWithdrawn" });
         Audit("HealthConsentWithdrawn", profile.Id);
         await db.SaveChangesAsync();
+        await transaction.CommitAsync();
         TempData["Success"] = "Health consent withdrawn. Your health fields and their public visibility have been removed.";
         return RedirectToAction(nameof(Edit));
     }
@@ -148,7 +171,8 @@ public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUs
     {
         if (token.Length is < 32 or > 100) return NotFound();
         var hash = TokenService.Hash(token);
-        var profile = await db.EmergencyIdentifiers.AsNoTracking().Where(x => x.TokenHash == hash && x.IsActive && x.RevokedAt == null).Select(x => x.RiderProfile).FirstOrDefaultAsync();
+        var profile = await db.EmergencyIdentifiers.AsNoTracking().Where(x => x.TokenHash == hash && x.IsActive && !x.IsAdminBlocked && x.RevokedAt == null)
+            .Select(x => new { x.RiderProfile.UserId, x.RiderProfile.PublicFields, x.RiderProfile.PhotoFileName }).FirstOrDefaultAsync();
         if (profile is null || (profile.PublicFields & PublicFields.Photo) == 0 || !await db.Users.AnyAsync(x => x.Id == profile.UserId && x.IsActive)) return NotFound();
         return PhotoResult(profile.PhotoFileName);
     }
@@ -158,20 +182,27 @@ public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUs
     {
         var user = await users.GetUserAsync(User);
         var profile = await db.RiderProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.UserId == UserId);
-        if (user is null || profile is null) return NotFound();
-        var contacts = await db.EmergencyContacts.AsNoTracking().Where(x => x.RiderProfileId == profile.Id).Select(x => new { x.Id, x.Name, x.Relationship, x.Email, x.Phone, x.PublicPhone, x.NotifyEnabled, x.IsVerified }).ToListAsync();
-        var identifiers = await db.EmergencyIdentifiers.AsNoTracking().Where(x => x.RiderProfileId == profile.Id).Select(x => new { x.Id, x.Label, x.IsActive, x.CreatedAt, x.RevokedAt }).ToListAsync();
-        var incidents = await db.Incidents.AsNoTracking().Where(x => x.RiderProfileId == profile.Id).Select(x => new { x.Id, x.ReportedAt, x.ExpiresAt, x.Latitude, x.Longitude, x.LocationDescription, x.Consciousness, x.PeopleInvolved, x.IsClosed }).ToListAsync();
-        var consents = await db.ConsentRecords.AsNoTracking().Where(x => x.UserId == UserId).Select(x => new { x.PolicyVersion, x.Action, x.CreatedAt }).ToListAsync();
+        if (user is null) return NotFound();
+        var profileId = profile?.Id;
+        var contacts = await db.EmergencyContacts.AsNoTracking().Where(x => x.RiderProfileId == profileId).Select(x => new { x.Id, x.Name, x.Relationship, x.Email, x.Phone, x.PublicPhone, x.PublicPhoneRequested, x.PublicPhoneConsentedAt, x.ConsentPolicyVersion, x.NotificationsRequested, x.NotifyEnabled, x.NotificationsConsentedAt, x.IsVerified, x.VerificationExpiresAt }).ToListAsync();
+        var identifiers = await db.EmergencyIdentifiers.AsNoTracking().Where(x => x.RiderProfileId == profileId).Select(x => new { x.Id, x.Label, x.IsActive, x.IsAdminBlocked, x.CreatedAt, x.RevokedAt }).ToListAsync();
+        var incidents = await db.Incidents.AsNoTracking().Where(x => x.RiderProfileId == profileId).Select(x => new { x.Id, x.ReportedAt, x.ExpiresAt, x.Latitude, x.Longitude, x.LocationDescription, x.Consciousness, x.PeopleInvolved, x.IsClosed }).ToListAsync();
+        var consents = await db.ConsentRecords.AsNoTracking().Where(x => x.UserId == UserId).Select(x => new { x.PolicyVersion, x.ConsentText, x.Action, x.CreatedAt }).ToListAsync();
+        var accesses = await db.IncidentAccesses.AsNoTracking().Where(x => x.Incident.RiderProfileId == profileId)
+            .Select(x => new { x.Id, x.IncidentId, x.EmergencyContactId, x.Role, x.ExpiresAt, x.IsRevoked, x.InvitationConsumedAt }).ToListAsync();
+        var notifications = await db.OutboxMessages.AsNoTracking().Where(x => (profileId != null && x.RiderProfileId == profileId) || (x.IncidentId != null && db.Incidents.Any(i => i.Id == x.IncidentId && i.RiderProfileId == profileId)) || (x.EmergencyContactId != null && db.EmergencyContacts.Any(c => c.Id == x.EmergencyContactId && c.RiderProfileId == profileId)))
+            .Select(x => new { x.Id, x.RiderProfileId, x.IncidentId, x.EmergencyContactId, x.ToEmail, x.Subject, x.Kind, x.CreatedAt, x.NextAttemptAt, x.AcceptedAt, x.Attempts, x.LastError }).ToListAsync();
+        var audit = await db.AuditEvents.AsNoTracking().Where(x => x.ActorId == UserId).OrderBy(x => x.CreatedAt)
+            .Select(x => new { x.Action, x.EntityId, x.CreatedAt }).ToListAsync();
         string? photo = null;
-        if (SafePhotoPath(profile.PhotoFileName) is { } photoPath && System.IO.File.Exists(photoPath)) photo = Convert.ToBase64String(await System.IO.File.ReadAllBytesAsync(photoPath));
+        if (SafePhotoPath(profile?.PhotoFileName) is { } photoPath && System.IO.File.Exists(photoPath)) photo = Convert.ToBase64String(await System.IO.File.ReadAllBytesAsync(photoPath));
         var data = new
         {
-            ExportedAt = DateTimeOffset.UtcNow, Account = new { user.Email, user.EmailConfirmed, user.PhoneNumber, user.TwoFactorEnabled },
-            Profile = new { profile.FullName, profile.DateOfBirth, profile.BloodType, profile.Allergies, profile.Conditions, profile.Medications, profile.OtherInformation, profile.Instructions, PublicFields = profile.PublicFields.ToString(), profile.HealthConsent, profile.ConsentAt, profile.UpdatedAt },
-            Photo = new { FileName = profile.PhotoFileName, Base64 = photo }, Contacts = contacts, Stickers = identifiers, Incidents = incidents, ConsentRecords = consents
+            ExportedAt = DateTimeOffset.UtcNow, Account = new { user.Id, user.UserName, user.Email, user.EmailConfirmed, user.PhoneNumber, user.PhoneNumberConfirmed, user.TwoFactorEnabled, user.LockoutEnabled, user.LockoutEnd, user.AccessFailedCount, user.IsActive },
+            Profile = profile is null ? null : new { profile.Id, profile.FullName, profile.DateOfBirth, profile.BloodType, profile.Allergies, profile.Conditions, profile.Medications, profile.OtherInformation, profile.Instructions, PublicFields = profile.PublicFields.ToString(), profile.HealthConsent, profile.ConsentAt, profile.ConsentPolicyVersion, profile.UpdatedAt },
+            Photo = new { FileName = profile?.PhotoFileName, Base64 = photo }, Contacts = contacts, Stickers = identifiers, Incidents = incidents, IncidentAccess = accesses, Notifications = notifications, ConsentRecords = consents, Audit = audit
         };
-        Audit("PersonalDataExported", profile.Id);
+        db.AuditEvents.Add(new AuditEvent { ActorId = UserId, Action = "PersonalDataExported", EntityId = profileId?.ToString() });
         await db.SaveChangesAsync();
         Response.Headers.CacheControl = "no-store";
         return File(JsonSerializer.SerializeToUtf8Bytes(data, new JsonSerializerOptions { WriteIndented = true }), "application/json", "scanback-personal-data.json");
@@ -180,7 +211,7 @@ public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUs
     [HttpGet("delete")]
     public IActionResult Delete() => View(new DeleteAccountModel());
 
-    [HttpPost("delete"), ValidateAntiForgeryToken]
+    [HttpPost("delete"), ValidateAntiForgeryToken, EnableRateLimiting("authentication")]
     public async Task<IActionResult> Delete(DeleteAccountModel model)
     {
         if (!model.ConfirmDeletion) ModelState.AddModelError(nameof(model.ConfirmDeletion), "Confirm permanent account deletion.");
@@ -192,10 +223,16 @@ public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUs
             ModelState.AddModelError(nameof(model.Password), "The password is incorrect.");
             return View(model);
         }
+        // Keep the count and deletion under the same serializable transaction as administrator status changes.
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         if (await users.IsInRoleAsync(user, "Administrator"))
         {
-            var administrators = await users.GetUsersInRoleAsync("Administrator");
-            if (administrators.Count(x => x.IsActive && x.Id != user.Id) == 0)
+            var remainingAdministrators = await (from membership in db.UserRoles
+                                                 join role in db.Roles on membership.RoleId equals role.Id
+                                                 join administrator in db.Users on membership.UserId equals administrator.Id
+                                                 where role.NormalizedName == "ADMINISTRATOR" && administrator.IsActive && administrator.Id != user.Id
+                                                 select administrator.Id).Distinct().CountAsync();
+            if (remainingAdministrators == 0)
             {
                 ModelState.AddModelError("", "Create another active administrator before deleting the last administrator account.");
                 return View(model);
@@ -205,17 +242,16 @@ public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUs
         var photo = profile?.PhotoFileName;
         var profileId = profile?.Id;
         var profileIdText = profileId?.ToString();
-        await using var transaction = await db.Database.BeginTransactionAsync();
         var contactIds = profile is null ? new List<Guid>() : await db.EmergencyContacts.Where(x => x.RiderProfileId == profile.Id).Select(x => x.Id).ToListAsync();
         var incidentIds = profile is null ? new List<Guid>() : await db.Incidents.Where(x => x.RiderProfileId == profile.Id).Select(x => x.Id).ToListAsync();
         var identifierIds = profile is null ? new List<Guid>() : await db.EmergencyIdentifiers.Where(x => x.RiderProfileId == profile.Id).Select(x => x.Id).ToListAsync();
-        var grantIds = await db.IncidentAccesses.Where(x => incidentIds.Contains(x.IncidentId)).Select(x => x.Id).ToListAsync();
+        var grantIds = await db.IncidentAccesses.Where(x => incidentIds.Contains(x.IncidentId) || (x.EmergencyContactId.HasValue && contactIds.Contains(x.EmergencyContactId.Value))).Select(x => x.Id).ToListAsync();
         var ownedEntityIds = contactIds.Concat(incidentIds).Concat(identifierIds).Concat(grantIds).Select(x => x.ToString()).ToList();
         ownedEntityIds.Add(user.Id);
         if (profileIdText is not null) ownedEntityIds.Add(profileIdText);
         var outbox = await db.OutboxMessages.Where(x => (profileId.HasValue && x.RiderProfileId == profileId) || (x.EmergencyContactId.HasValue && contactIds.Contains(x.EmergencyContactId.Value)) || (x.IncidentId.HasValue && incidentIds.Contains(x.IncidentId.Value)) || ((x.Kind == "Confirmation" || x.Kind == "PasswordReset") && x.ToEmail == user.Email)).ToListAsync();
         db.OutboxMessages.RemoveRange(outbox);
-        db.IncidentAccesses.RemoveRange(await db.IncidentAccesses.Where(x => incidentIds.Contains(x.IncidentId)).ToListAsync());
+        db.IncidentAccesses.RemoveRange(await db.IncidentAccesses.Where(x => grantIds.Contains(x.Id)).ToListAsync());
         await db.SaveChangesAsync();
         db.Incidents.RemoveRange(await db.Incidents.Where(x => incidentIds.Contains(x.Id)).ToListAsync());
         await db.SaveChangesAsync();
@@ -242,6 +278,10 @@ public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUs
         TempData["Success"] = "Your account and its active personal data have been deleted.";
         return RedirectToAction("Index", "Home");
     }
+
+    private Task<RiderProfile?> OwnProfileForUpdate() => db.Database.IsSqlServer()
+        ? db.RiderProfiles.FromSqlInterpolated($"SELECT * FROM [RiderProfiles] WITH (UPDLOCK, HOLDLOCK) WHERE [UserId] = {UserId}").SingleOrDefaultAsync()
+        : db.RiderProfiles.FirstOrDefaultAsync(x => x.UserId == UserId);
 
     private IActionResult PhotoResult(string? filename)
     {

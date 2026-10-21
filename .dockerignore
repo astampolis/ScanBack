@@ -2,6 +2,10 @@
 **/obj
 **/App_Data
 **/appsettings.Local.json
+**/appsettings.*.json
+**/*.pfx
+**/*.p12
+**/*.pem
 .runtime
 artifacts
 .git

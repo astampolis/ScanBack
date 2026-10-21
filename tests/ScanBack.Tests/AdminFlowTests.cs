@@ -131,6 +131,31 @@ public sealed class AdminFlowTests(SqlWebFixture fixture)
         Assert.Equal(HttpStatusCode.NotFound, (await riderClient.GetAsync("/e/" + rider.Token)).StatusCode);
     }
 
+    [Fact]
+    public async Task Administrative_sticker_block_survives_owner_toggle_and_token_replacement()
+    {
+        var rider = await fixture.SeedRider(PublicFields.Name);
+        var incident = await fixture.SeedIncident(rider);
+        using var owner = fixture.Client();
+        await SqlWebFixture.Login(owner, rider.Email);
+        var session = await AdministratorSession();
+        using var administrator = session.Client;
+        var csrf = await SqlWebFixture.Antiforgery(administrator, "/admin/identifiers");
+        Assert.Equal(HttpStatusCode.Redirect, (await administrator.PostAsync("/admin/identifiers/" + rider.Identifier.Id + "/revoke", new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = csrf }))).StatusCode);
+        Assert.True(await fixture.InDatabase(db => db.EmergencyIdentifiers.Where(x => x.Id == rider.Identifier.Id).Select(x => x.IsAdminBlocked).SingleAsync()));
+        csrf = await SqlWebFixture.Antiforgery(owner, "/stickers");
+        foreach (var action in new[] { "toggle", "replace" })
+        {
+            await owner.PostAsync("/stickers/" + rider.Identifier.Id + "/" + action, new FormUrlEncodedContent(new Dictionary<string, string> { ["__RequestVerificationToken"] = csrf }));
+            var sticker = await fixture.InDatabase(db => db.EmergencyIdentifiers.AsNoTracking().SingleAsync(x => x.Id == rider.Identifier.Id));
+            Assert.True(sticker.IsAdminBlocked);
+            Assert.False(sticker.IsActive);
+            Assert.Equal(rider.Identifier.TokenHash, sticker.TokenHash);
+            Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync("/e/" + rider.Token)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync("/incident/join/" + incident.Token)).StatusCode);
+        }
+    }
+
     private async Task<(HttpClient Client, RiderSeed Rider)> AdministratorSession()
     {
         var rider = await fixture.SeedRider();
