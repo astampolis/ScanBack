@@ -4,6 +4,21 @@ public sealed partial class UiText
 {
     private static readonly Dictionary<string, string> Greek = new(StringComparer.Ordinal)
     {
+        ["Loading chat…"] = "Φόρτωση συνομιλίας…",
+        ["Live · updates every 3 seconds"] = "Ζωντανά · ενημέρωση κάθε 3 δευτερόλεπτα",
+        ["Connection interrupted. Retrying…"] = "Η σύνδεση διακόπηκε. Νέα προσπάθεια…",
+        ["Chat access has ended. Reload the incident page."] = "Η πρόσβαση στη συνομιλία έληξε. Φορτώστε ξανά τη σελίδα περιστατικού.",
+        ["Message not sent. Your text is kept; try again."] = "Το μήνυμα δεν στάλθηκε. Το κείμενο διατηρείται· δοκιμάστε ξανά.",
+        ["Too many messages. Wait a minute and try again."] = "Πάρα πολλά μηνύματα. Περιμένετε ένα λεπτό και δοκιμάστε ξανά.",
+        ["Assisting person"] = "Άτομο που βοηθά",
+        ["Emergency contact"] = "Επαφή έκτακτης ανάγκης",
+        ["Live incident chat"] = "Ζωντανή συνομιλία περιστατικού",
+        ["Only the assisting person and contacts who accepted this incident invitation can read or send messages. This is not a chat with emergency services."] = "Μόνο το άτομο που βοηθά και οι επαφές που αποδέχτηκαν την πρόσκληση αυτού του περιστατικού μπορούν να διαβάσουν ή να στείλουν μηνύματα. Δεν είναι συνομιλία με υπηρεσίες έκτακτης ανάγκης.",
+        ["Incident messages"] = "Μηνύματα περιστατικού",
+        ["Message"] = "Μήνυμα",
+        ["Send message"] = "Αποστολή μηνύματος",
+        ["Up to 1,000 characters. Share only what is needed. Messages are retained with the incident and deleted under its retention policy."] = "Έως 1.000 χαρακτήρες. Μοιραστείτε μόνο όσα χρειάζονται. Τα μηνύματα διατηρούνται μαζί με το περιστατικό και διαγράφονται σύμφωνα με την πολιτική διατήρησής του.",
+        ["Enable JavaScript to use live chat. You can still use the incident information and call emergency services."] = "Ενεργοποιήστε τη JavaScript για ζωντανή συνομιλία. Μπορείτε ακόμη να δείτε τα στοιχεία του περιστατικού και να καλέσετε τις υπηρεσίες έκτακτης ανάγκης.",
         ["Confirm your email"] = "Επιβεβαιώστε το email σας",
         ["Confirm this email address for your ScanBack account. You can sign in after confirming."] = "Επιβεβαιώστε αυτήν τη διεύθυνση email για τον λογαριασμό ScanBack σας. Μετά την επιβεβαίωση μπορείτε να συνδεθείτε.",
         ["Confirm email address"] = "Επιβεβαίωση διεύθυνσης email",

@@ -10,10 +10,20 @@
         <h1>@Model.Heading</h1>
         <p class="marketing-introduction">@Model.Introduction</p>
     </header>
+    <nav class="marketing-contents" aria-label="@(greek ? "Περιεχόμενα σελίδας" : "On this page")">
+        <h2>@(greek ? "Σε αυτή τη σελίδα" : "On this page")</h2>
+        <ul>
+            @for (var i = 0; i < Model.Sections.Count; i++)
+            {
+                <li><a href="#section-@(i + 1)">@Model.Sections[i].Heading</a></li>
+            }
+        </ul>
+    </nav>
     <div class="marketing-reading">
-        @foreach (var contentSection in Model.Sections)
+        @for (var i = 0; i < Model.Sections.Count; i++)
         {
-            <section>
+            var contentSection = Model.Sections[i];
+            <section id="section-@(i + 1)">
                 <h2>@contentSection.Heading</h2>
                 @foreach (var paragraph in contentSection.Paragraphs)
                 {
@@ -45,6 +55,7 @@
             @if (Model.Seo.Slug != "how-it-works") { <a href="@(home + "/how-it-works")">@(greek ? "Πώς λειτουργεί το ScanBack" : "How ScanBack works") <span aria-hidden="true">→</span></a> }
             @if (Model.Seo.Slug != "qr-nfc-helmet-stickers") { <a href="@(home + "/qr-nfc-helmet-stickers")">@(greek ? "Αυτοκόλλητα QR και ετικέτες NFC για κράνη" : "QR and NFC helmet stickers") <span aria-hidden="true">→</span></a> }
             @if (Model.Seo.Slug != "motorcycle-emergency-guide") { <a href="@(home + "/motorcycle-emergency-guide")">@(greek ? "Προετοιμασία έκτακτης ανάγκης στην Ελλάδα" : "Emergency preparation in Greece") <span aria-hidden="true">→</span></a> }
+            @if (Model.Seo.Slug != "frequently-asked-questions") { <a href="@(home + "/frequently-asked-questions")">@(greek ? "Συχνές ερωτήσεις για QR, NFC και απόρρητο" : "QR, NFC and privacy FAQ") <span aria-hidden="true">→</span></a> }
             <a href="/privacy">@(greek ? "Απόρρητο και επιλογές κοινοποίησης" : "Privacy and sharing choices") <span aria-hidden="true">→</span></a>
         </nav>
         <a class="btn btn-primary" href="/account/register">@T["Create my rider profile"] <span aria-hidden="true">→</span></a>

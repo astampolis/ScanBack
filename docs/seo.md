@@ -4,7 +4,7 @@ ScanBack publishes useful English and Greek pages about QR/NFC motorcycle helmet
 
 ## What may appear in search
 
-The sitemap is an explicit list of eight public marketing pages:
+The sitemap is an explicit list of ten public marketing pages:
 
 | English | Greek |
 | --- | --- |
@@ -12,10 +12,11 @@ The sitemap is an explicit list of eight public marketing pages:
 | `/en/how-it-works` | `/el/how-it-works` |
 | `/en/qr-nfc-helmet-stickers` | `/el/qr-nfc-helmet-stickers` |
 | `/en/motorcycle-emergency-guide` | `/el/motorcycle-emergency-guide` |
+| `/en/frequently-asked-questions` | `/el/frequently-asked-questions` |
 
-Each language URL serves its language directly, without requiring a language cookie or browser preference. `/` redirects permanently to `/en`. Each page has a canonical URL, reciprocal English/Greek `hreflang` links and an English `x-default` link. Canonicals omit query strings. Their origin comes from trusted `Site:BaseUrl`, never the request Host header.
+Each language URL serves its language directly, without requiring a language cookie or browser preference. `/` redirects permanently to `/en`. Each page has a canonical URL, reciprocal English/Greek `hreflang` links and an English `x-default` link. Case and trailing-slash variants of the allowlisted editorial routes redirect permanently (308) to their lowercase canonical paths, preserving tracking parameters on the redirect. Canonicals omit query strings. Private capability paths are never normalized by this rule. Their origin comes from trusted `Site:BaseUrl`, never the request Host header.
 
-Public pages provide a distinct title, description, social metadata and truthful WebSite, Organization and breadcrumb structured data. These describe ScanBack and the page; they do not assert reviews, emergency-service endorsement, medical effectiveness or guaranteed search features. Google may choose different search snippets or omit structured-data enhancements.
+Public pages provide a distinct title, description, social metadata and linked WebPage, WebSite and Organization structured data. Articles include a two-item BreadcrumbList matching the visible navigation; the homepage omits breadcrumb markup because it has no trail. FAQ answers are ordinary visible editorial content, without claiming eligibility for FAQ rich results. These describe ScanBack and the page; they do not assert reviews, emergency-service endorsement, medical effectiveness or guaranteed search features. Google may choose different search snippets or omit structured-data enhancements.
 
 Accounts, rider profiles, photos, contacts, sticker downloads, emergency links and incidents must stay out of search. They are excluded from the sitemap and receive `noindex, nofollow` and `Cache-Control: no-store`. The privacy notice and operational endpoints are not marketing landing pages. Keep the indexing exception restricted to the explicitly marked marketing endpoints when adding routes.
 
@@ -25,7 +26,7 @@ Accounts, rider profiles, photos, contacts, sticker downloads, emergency links a
 
 1. Configure the real public HTTPS origin in `Site:BaseUrl` and the matching exact hostname in `AllowedHosts`. Complete DNS, the IIS HTTPS binding and a trusted certificate using [the deployment guide](iis-deployment.md). Choose one public hostname and redirect aliases at the trusted edge. Keep staging environments access controlled and excluded from indexing.
 2. Request every public language URL on the live domain. Confirm a successful response, the intended language, one meaningful H1, readable mobile layout and working links. Inspect the rendered HTML for its canonical, description, reciprocal alternate URLs and structured data. Confirm the public response does not carry `X-Robots-Tag: noindex` or a robots `noindex` meta tag.
-3. Fetch `/robots.txt` and `/sitemap.xml`. Confirm the sitemap contains only the eight configured-origin URLs, with neither private IDs nor tokens. Check that public CSS, JavaScript and brand assets are crawlable. Redirects, errors and private responses must retain their restrictive indexing policy.
+3. Fetch `/robots.txt` and `/sitemap.xml`. Confirm the sitemap contains only the ten configured-origin URLs, with neither private IDs nor tokens. Check that public CSS, JavaScript and brand assets are crawlable. Redirects, errors and private responses must retain their restrictive indexing policy.
 4. With synthetic data, check an emergency response and authenticated account/profile/incident responses for `X-Robots-Tag: noindex, nofollow` and `Cache-Control: no-store`. Check redirects and unavailable links too. Do not test by submitting a live capability to a public validation service.
 5. Verify the production domain in [Google Search Console](https://search.google.com/search-console/about), preferably with the domain property's DNS record. Submit the production `/sitemap.xml`. Inspect only the public marketing URLs and request indexing when a page is ready. Review Page indexing, HTTPS, Crawl stats and enhancement reports after Google has recrawled.
 
@@ -43,10 +44,18 @@ If `Site:ContentUpdatedAt` is configured for sitemap `lastmod`, use the actual d
 
 ## Performance and ongoing review
 
-Public pages are rendered on the server and use local assets. Keep the initial HTML useful without JavaScript, compress responses at the server/edge, retain explicit image dimensions, and avoid unnecessary third-party scripts or oversized imagery. Shared caches must not store authenticated or personalized pages. A public cache rule must never expand to emergency links, contact verification, account pages or private photos.
+Public pages are rendered on the server and use local assets. They do not load Bootstrap JavaScript or the workspace copy-link script; all public navigation and article contents links work without JavaScript. Keep the initial HTML useful without JavaScript, compress responses at the server/edge, retain explicit image dimensions, and avoid unnecessary third-party scripts or oversized imagery. Shared caches must not store authenticated or personalized pages. A public cache rule must never expand to emergency links, contact verification, account pages or private photos.
 
 Measure the live mobile experience with PageSpeed Insights and Search Console's Core Web Vitals report. Track LCP, INP and CLS using field data when traffic is sufficient; laboratory scores help diagnosis but do not prove field performance or ranking. Check accessibility, keyboard use, text contrast, language switching, internal links and real phone QR/NFC behavior after visual changes. No analytics or external trackers are needed to publish these pages; review consent and privacy requirements before introducing them.
 
 Review search queries, index coverage, broken links and content accuracy regularly. Investigate unexpected private URLs immediately. Keep Search Console access limited to trusted operators and avoid copying reports containing capability URLs into general tickets or chat.
 
 Official guidance: [Google Search Essentials](https://developers.google.com/search/docs/essentials), [SEO starter guide](https://developers.google.com/search/docs/fundamentals/seo-starter-guide), [localized versions](https://developers.google.com/search/docs/specialty/international/localized-versions), [sitemaps](https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview), [robots meta and headers](https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag), and [Core Web Vitals](https://web.dev/articles/vitals).
+
+## Automated checks and launch acceptance
+
+`SeoTests` covers all ten public URLs in both languages: distinct titles/descriptions, a single H1, trusted canonicals, reciprocal hreflang, content language, WebPage relationships, valid article breadcrumbs, article section links and absence of unnecessary JavaScript. Tests also check permanent normalization redirects, true 404 responses, sitemap allowlisting and private-page noindex/no-store behavior. CI runs these tests against real SQL alongside the account and emergency-flow tests.
+
+After deployment, verify the public domain in Search Console, submit `/sitemap.xml`, inspect the public pages and run Rich Results Test and PageSpeed Insights using only public URLs. Field Core Web Vitals targets are LCP at most 2.5 seconds, INP at most 200 ms and CLS at most 0.1 at the 75th percentile. Record measurements from the real deployment; a local browser check or a passing unit test does not prove those field targets. Do not claim a ranking or an indexing date based on a test score.
+
+Keep public facts current, identify the actual operator in the privacy notice and arrange an owner to review the safety guide against its linked official sources. Do not invent author qualifications, reviews, medical endorsements or editorial revision dates. Set `Site:ContentUpdatedAt` only when an actual substantive editorial revision date is known.

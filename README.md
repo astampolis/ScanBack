@@ -12,11 +12,12 @@ The sticker stores an HTTPS URL, never medical information. Anyone with a copy o
 - Multiple QR/NFC identifiers (up to ten), labels, activation/deactivation, permanent replacement, SVG/PNG downloads, and printable sticker sheets.
 - Anonymous emergency pages, prominent 112/166 dialing, and Greek/English safety reminders.
 - Explicit possible-accident reporting, optional permission-based GPS, manual landmarks, duplicate suppression, notification cooldowns, and per-source limits.
+- Restricted live incident chat with durable protected messages, automatic three-second updates, per-request access checks, retry deduplication, send limits and incident retention.
 - Incident-specific reporter sessions and separate expiring, single-use contact invitations, restricted location access, Google Maps links, email delivery status, and a rule-based dispatcher script.
 - Persistent notification outbox with encrypted message bodies, SMTP with verified TLS for remote providers, bounded retries, and automatic incident/outbox/audit cleanup.
 - MFA-protected administration of account/identifier status, limited incident metadata, delivery configuration, retention, and technical audit events. Administrators do not get medical-profile access.
 
-Optional SignalR chat, SMS, external AI, payments, physical sticker fulfilment, and extended incident reporting are **not part of this mandatory MVP**. No external AI receives health data.
+Optional SMS, external AI, payments, physical sticker fulfilment, and extended incident reporting are **not part of this mandatory MVP**. No external AI receives health data.
 
 ## Local development
 
@@ -79,6 +80,9 @@ No live emergency-service calls are needed for this demonstration. Use synthetic
 See [validation results and demonstration screenshots](docs/validation.md) for the flows exercised in the cloud instance.
 
 ## Windows Server / IIS deployment
+
+Για εγκατάσταση από Windows PC, δες τον [σύντομο ελληνικό οδηγό](docs/windows-quickstart.el.md) και το νέο `deploy/Setup-ScanBack.ps1` που συγκεντρώνει configuration, εγκατάσταση, SQL initialization και εκκίνηση.
+
 
 The supported production package targets **Windows Server 2022/2025 x64 + IIS 10 + the .NET 10 Hosting Bundle**, with SQL Server and a transactional SMTP provider. Build it from PowerShell 7 using the pinned SDK:
 

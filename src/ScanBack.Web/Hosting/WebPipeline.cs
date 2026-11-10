@@ -49,6 +49,24 @@ public static class WebPipeline
             }
         });
         app.UseRouting();
+        app.Use(async (context, next) =>
+        {
+            // Normalize only reviewed editorial routes. Never rewrite a case-sensitive
+            // rider capability, invitation, uploaded file or other application path.
+            if ((HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method))
+                && context.GetEndpoint()?.Metadata.GetMetadata<PublicMarketingPageAttribute>() is not null)
+            {
+                var path = context.Request.Path.Value ?? "";
+                var canonicalPath = path.TrimEnd('/').ToLowerInvariant();
+                if (!string.Equals(path, canonicalPath, StringComparison.Ordinal))
+                {
+                    context.Response.Redirect(context.Request.PathBase + canonicalPath + context.Request.QueryString,
+                        permanent: true, preserveMethod: true);
+                    return;
+                }
+            }
+            await next();
+        });
         // Public editorial HTML contains no account data, tokens or antiforgery
         // secrets. Keep response compression outside all sensitive workflows.
         app.UseWhen(context => context.GetEndpoint()?.Metadata.GetMetadata<PublicMarketingPageAttribute>() is not null,

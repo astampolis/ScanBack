@@ -15,6 +15,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, IDataPr
     public DbSet<EmergencyIdentifier> EmergencyIdentifiers => Set<EmergencyIdentifier>();
     public DbSet<Incident> Incidents => Set<Incident>();
     public DbSet<IncidentAccess> IncidentAccesses => Set<IncidentAccess>();
+    public DbSet<IncidentChatMessage> IncidentChatMessages => Set<IncidentChatMessage>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<ConsentRecord> ConsentRecords => Set<ConsentRecord>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
@@ -104,6 +105,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options, IDataPr
             entity.HasIndex(x => x.ExpiresAt);
             entity.HasOne(x => x.Incident).WithMany(x => x.AccessGrants).HasForeignKey(x => x.IncidentId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<EmergencyContact>().WithMany().HasForeignKey(x => x.EmergencyContactId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        var chatProtector = dataProtectionProvider.CreateProtector("ScanBack.IncidentChat.v1");
+        var chatConverter = new ValueConverter<string, string>(value => chatProtector.Protect(value), value => chatProtector.Unprotect(value));
+        builder.Entity<IncidentChatMessage>(entity =>
+        {
+            entity.Property(x => x.SenderRole).HasMaxLength(32);
+            entity.Property(x => x.Body).HasConversion(chatConverter).HasColumnType("nvarchar(max)");
+            entity.HasIndex(x => new { x.IncidentId, x.Id });
+            entity.HasIndex(x => new { x.IncidentId, x.SenderAccessId, x.ClientMessageId }).IsUnique();
+            entity.HasOne(x => x.Incident).WithMany().HasForeignKey(x => x.IncidentId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<OutboxMessage>(entity =>

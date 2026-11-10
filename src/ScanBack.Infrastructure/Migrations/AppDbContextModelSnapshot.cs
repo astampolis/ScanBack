@@ -463,6 +463,45 @@ namespace ScanBack.Infrastructure.Migrations
                     b.ToTable("IncidentAccesses");
                 });
 
+            modelBuilder.Entity("ScanBack.Domain.IncidentChatMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("ClientMessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("IncidentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SenderAccessId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("SenderRole")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)");
+
+                    b.Property<DateTimeOffset>("SentAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IncidentId", "Id");
+
+                    b.HasIndex("IncidentId", "SenderAccessId", "ClientMessageId")
+                        .IsUnique();
+
+                    b.ToTable("IncidentChatMessages");
+                });
+
             modelBuilder.Entity("ScanBack.Domain.OutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -802,6 +841,17 @@ namespace ScanBack.Infrastructure.Migrations
 
                     b.HasOne("ScanBack.Domain.Incident", "Incident")
                         .WithMany("AccessGrants")
+                        .HasForeignKey("IncidentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Incident");
+                });
+
+            modelBuilder.Entity("ScanBack.Domain.IncidentChatMessage", b =>
+                {
+                    b.HasOne("ScanBack.Domain.Incident", "Incident")
+                        .WithMany()
                         .HasForeignKey("IncidentId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

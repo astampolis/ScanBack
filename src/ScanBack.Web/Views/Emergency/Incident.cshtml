@@ -43,3 +43,24 @@
 {
     <section class="card"><h2>@T["Shared emergency information"]</h2><p class="field-help">@T["Medical details are rider supplied and are not independently verified."]</p><dl class="detail-grid">@foreach (var field in Model.Profile.MedicalFields) { <div><dt>@T[field.Label]</dt><dd class="preserve-lines">@field.Value</dd></div> }</dl></section>
 }
+<section class="card incident-chat" id="incident-chat" aria-labelledby="chat-heading" data-url="/incident/@Model.Id/chat"
+    data-loading="@T["Loading chat…"]" data-live="@T["Live · updates every 3 seconds"]"
+    data-offline="@T["Connection interrupted. Retrying…"]" data-ended="@T["Chat access has ended. Reload the incident page."]"
+    data-failed="@T["Message not sent. Your text is kept; try again."]" data-limited="@T["Too many messages. Wait a minute and try again."]"
+    data-you="@T["You"]" data-reporter="@T["Assisting person"]" data-contact="@T["Emergency contact"]">
+    <h2 id="chat-heading">@T["Live incident chat"]</h2>
+    <p class="field-help">@T["Only the assisting person and contacts who accepted this incident invitation can read or send messages. This is not a chat with emergency services."]</p>
+    <p id="chat-status" role="status">@T["Loading chat…"]</p>
+    <div id="chat-messages" class="chat-messages" role="log" aria-live="polite" aria-relevant="additions" aria-label="@T["Incident messages"]" tabindex="0"></div>
+    <form id="chat-form" hidden>
+        @Html.AntiForgeryToken()
+        <label for="chat-body">@T["Message"]</label>
+        <textarea id="chat-body" name="Body" class="form-control" rows="3" maxlength="1000" required aria-describedby="chat-help"></textarea>
+        <p id="chat-help" class="field-help">@T["Up to 1,000 characters. Share only what is needed. Messages are retained with the incident and deleted under its retention policy."]</p>
+        <button class="btn btn-primary" type="submit">@T["Send message"]</button>
+    </form>
+    <noscript><p>@T["Enable JavaScript to use live chat. You can still use the incident information and call emergency services."]</p></noscript>
+</section>
+@section Scripts {
+    <script src="~/js/incident-chat.js" asp-append-version="true" defer></script>
+}

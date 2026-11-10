@@ -4,7 +4,9 @@ Target: Windows Server 2022/2025 x64, IIS 10, .NET 10 Hosting Bundle, SQL Server
 
 Read [the complete deployment procedure](docs/iis-deployment.md) before running scripts. The package contains `Web`, `Worker`, `Tools`, and `deploy`. Edit a copy of `deploy/appsettings.Production.example.json` outside this package, protect it, and supply your real domain, certificates, SQL server and mail provider. The installer never invents them.
 
-In an elevated **Windows PowerShell 5.1** session, after installing the prerequisites:
+For guided first installation with local SQL Server, follow [the Greek Windows quickstart](docs/windows-quickstart.el.md) and run `deploy\Setup-ScanBack.ps1 -Phase All` in elevated Windows PowerShell 5.1. It prompts for configuration and credentials, creates a separate data-protection certificate, provisions the database and restricted runtime access, installs the hosts and checks HTTPS readiness. Prerequisites and real DNS/TLS/SMTP details remain required. For separate operator accounts use the documented phases.
+
+For manual installation, in an elevated **Windows PowerShell 5.1** session, after installing the prerequisites:
 
 ```powershell
 .\deploy\Install-ScanBackIis.ps1 -PackagePath $PWD.Path -HostName 'YOUR-DNS-NAME' `
