@@ -80,6 +80,9 @@ See [validation results and demonstration screenshots](docs/validation.md) for t
 
 ## Windows Server / IIS deployment
 
+Για εγκατάσταση από Windows PC, δες τον [σύντομο ελληνικό οδηγό](docs/windows-quickstart.el.md) και το νέο `deploy/Setup-ScanBack.ps1` που συγκεντρώνει configuration, εγκατάσταση, SQL initialization και εκκίνηση.
+
+
 The supported production package targets **Windows Server 2022/2025 x64 + IIS 10 + the .NET 10 Hosting Bundle**, with SQL Server and a transactional SMTP provider. Build it from PowerShell 7 using the pinned SDK:
 
 ```powershell

@@ -32,7 +32,7 @@ try {
     Copy-Item (Join-Path $repository 'deploy') (Join-Path $stage 'deploy') -Recurse
     Copy-Item (Join-Path $repository 'deploy/web.config') (Join-Path $stage 'Web/web.config') -Force
     New-Item -ItemType Directory -Path (Join-Path $stage 'docs') -Force | Out-Null
-    foreach ($document in @('iis-deployment.md', 'operations.md', 'security.md', 'privacy-operations.md', 'seo.md')) {
+    foreach ($document in @('iis-deployment.md', 'operations.md', 'security.md', 'privacy-operations.md', 'seo.md', 'windows-quickstart.el.md')) {
         Copy-Item (Join-Path $repository "docs/$document") (Join-Path $stage "docs/$document")
     }
     Copy-Item (Join-Path $repository 'deploy/INSTALL.md') (Join-Path $stage 'INSTALL.md')
