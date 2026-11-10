@@ -26,6 +26,11 @@ public sealed class PublicMarketingController(SiteLinks links) : Controller
     [PublicMarketingPage]
     public IActionResult EmergencyGuide() => Page("motorcycle-emergency-guide");
 
+    [HttpGet("/en/frequently-asked-questions"), HttpHead("/en/frequently-asked-questions")]
+    [HttpGet("/el/frequently-asked-questions"), HttpHead("/el/frequently-asked-questions")]
+    [PublicMarketingPage]
+    public IActionResult FrequentlyAskedQuestions() => Page("frequently-asked-questions");
+
     [HttpGet("/how-it-works"), HttpHead("/how-it-works")]
     public IActionResult LegacyHowItWorks() => RedirectPermanent("/en/how-it-works");
 

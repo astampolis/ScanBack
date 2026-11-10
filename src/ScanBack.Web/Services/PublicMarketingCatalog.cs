@@ -7,7 +7,7 @@ namespace ScanBack.Web.Services;
 public static class PublicMarketingCatalog
 {
     public static IReadOnlyList<string> Languages { get; } = Array.AsReadOnly(new[] { "en", "el" });
-    public static IReadOnlyList<string> Slugs { get; } = Array.AsReadOnly(new[] { "", "how-it-works", "qr-nfc-helmet-stickers", "motorcycle-emergency-guide" });
+    public static IReadOnlyList<string> Slugs { get; } = Array.AsReadOnly(new[] { "", "how-it-works", "qr-nfc-helmet-stickers", "motorcycle-emergency-guide", "frequently-asked-questions" });
 
     public static PublicMarketingPage Page(string language, string slug, SiteLinks links)
     {
@@ -35,12 +35,35 @@ public static class PublicMarketingCatalog
                 ["publisher"] = new Dictionary<string, object> { ["@id"] = organizationId }
             }
         };
-        var breadcrumbs = new List<object>
+        var webPage = new Dictionary<string, object>
         {
-            new Dictionary<string, object> { ["@type"] = "ListItem", ["position"] = 1, ["name"] = greek ? "Αρχική" : "Home", ["item"] = links.Absolute("/" + language) }
+            ["@type"] = "WebPage", ["@id"] = canonical + "#webpage",
+            ["url"] = canonical, ["name"] = copy.Title, ["description"] = copy.Description,
+            ["inLanguage"] = language,
+            ["isPartOf"] = new Dictionary<string, object> { ["@id"] = links.Absolute("/#website") },
+            ["publisher"] = new Dictionary<string, object> { ["@id"] = organizationId },
+            ["primaryImageOfPage"] = new Dictionary<string, object>
+            {
+                ["@type"] = "ImageObject", ["url"] = links.Absolute("/images/scanback-social.png"),
+                ["width"] = 1200, ["height"] = 630
+            }
         };
-        if (slug.Length != 0) breadcrumbs.Add(new Dictionary<string, object> { ["@type"] = "ListItem", ["position"] = 2, ["name"] = copy.Heading, ["item"] = canonical });
-        graph.Add(new Dictionary<string, object> { ["@type"] = "BreadcrumbList", ["itemListElement"] = breadcrumbs });
+        // Google requires at least two breadcrumb items. The homepage has no trail.
+        if (slug.Length != 0)
+        {
+            var breadcrumbId = canonical + "#breadcrumb";
+            graph.Add(new Dictionary<string, object>
+            {
+                ["@type"] = "BreadcrumbList", ["@id"] = breadcrumbId,
+                ["itemListElement"] = new object[]
+                {
+                    new Dictionary<string, object> { ["@type"] = "ListItem", ["position"] = 1, ["name"] = greek ? "Αρχική" : "Home", ["item"] = links.Absolute("/" + language) },
+                    new Dictionary<string, object> { ["@type"] = "ListItem", ["position"] = 2, ["name"] = copy.Heading, ["item"] = canonical }
+                }
+            });
+            webPage["breadcrumb"] = new Dictionary<string, object> { ["@id"] = breadcrumbId };
+        }
+        graph.Add(webPage);
         var json = JsonSerializer.Serialize(new Dictionary<string, object>
         {
             ["@context"] = "https://schema.org", ["@graph"] = graph
@@ -118,6 +141,30 @@ public static class PublicMarketingCatalog
                 new("Οργανώστε στοιχεία και επαφές", ["Πριν από τη διαδρομή, ελέγξτε τις επαφές σας και συζητήστε τι θα πρέπει να κάνουν αν ενημερωθούν για πιθανό ατύχημα. Χρησιμοποιήστε διεθνείς κωδικούς τηλεφώνου όταν ταξιδεύετε. Προβλέψτε εναλλακτικό τρόπο εύρεσης βασικών επαφών αν το κινητό δεν είναι διαθέσιμο ή δεν υπάρχει δίκτυο.", "Αν χρησιμοποιείτε σελίδα ScanBack, ελέγξτε τα ορατά πεδία και δοκιμάστε τον σύνδεσμο QR ή NFC. Μοιραστείτε μόνο όσα έχετε επιλέξει να είναι προσβάσιμα. Οι πληροφορίες εισάγονται από τον μοτοσικλετιστή και δεν αποτελούν επαληθευμένο ιατρικό αρχείο."]),
                 new("Κοινοποιήστε την τοποθεσία συνειδητά", ["Η κοινοποίηση τοποθεσίας σε αναφορά ScanBack απαιτεί την άδειά σας. Ελέγξτε τον χάρτη ή τις συντεταγμένες και, αν μπορείτε, προσθέστε χρήσιμη περιγραφή. Ο εντοπισμός της συσκευής μπορεί να είναι ανακριβής, ιδίως κοντά σε σήραγγες, κτίρια ή απομονωμένους δρόμους. Δώστε την τοποθεσία απευθείας στον τηλεφωνητή: η εφαρμογή δεν στέλνει στο 112 ή στο 166 τη θέση που προσθέτετε στην αναφορά."]),
                 new("Ακολουθήστε επίσημες οδηγίες για τη φροντίδα", ["Αυτός ο οδηγός αφορά προετοιμασία και επικοινωνία, όχι ιατρική εκτίμηση ή εκπαίδευση πρώτων βοηθειών. Συμβουλεύεστε τις ισχύουσες οδηγίες των ελληνικών αρμόδιων αρχών και ακολουθείτε τον τηλεφωνητή. Το προφίλ QR υποστηρίζει την επικοινωνία· δεν αντικαθιστά διασώστες ή υπηρεσίες έκτακτης ανάγκης."])
+            ]),
+        ("frequently-asked-questions", false) => new("ScanBack FAQ: QR Helmet Stickers, NFC & Privacy",
+            "Answers about ScanBack QR and NFC helmet stickers: phone compatibility, internet access, contact notifications, lost stickers and control of shared information.",
+            "Questions about ScanBack QR and NFC helmet stickers", "Practical answers before you create a rider profile or share an emergency link.",
+            [
+                new("Do I or the person helping need an app?", ["ScanBack runs in a web browser. The rider needs an account to manage their profile; a helper does not need a ScanBack account to open an active sticker's emergency page. A phone camera or QR reader opens the QR link. NFC requires a compatible phone and a separately prepared tag."]),
+                new("Will my sticker work without internet access?", ["The sticker contains a web link, not an offline medical record. A helper needs an internet connection to retrieve the current page. Keep an alternative way to reach important contacts and never delay an emergency call while trying to open a page."]),
+                new("Does ScanBack automatically detect a crash or call an ambulance?", ["No. A scan does not detect an accident, track a rider or place an emergency call. A helper must deliberately submit a possible accident report. ScanBack can then queue email for verified contacts who have agreed to notifications. In Greece, call 112 or 166 directly for urgent assistance; the application does not dispatch responders."]),
+                new("Can someone find my medical information on Google?", ["Only the public product and guide pages are intended for search. Rider emergency pages are excluded from the sitemap and carry noindex instructions. Search exclusion is not a password: anyone who obtains an active emergency link can view the fields you choose to publish. Review the public preview and avoid sharing unnecessary information."]),
+                new("What happens if my helmet sticker is lost or copied?", ["Deactivate that identifier in your dashboard and create a replacement. An old copy will no longer open an active page. Revocation cannot remove screenshots or information someone has already copied. Updating your profile changes the information behind an active link without requiring a new print."]),
+                new("Do I receive a physical sticker or NFC tag?", ["ScanBack provides downloadable QR images, a printable sticker sheet and the emergency URL. Physical printing, helmet-compatible adhesives, NFC hardware and NFC writing tools are separate. Follow the helmet manufacturer's guidance and test the finished sticker or tag before riding."]),
+                new("Can I change my mind about sharing?", ["Yes. Change the visibility of individual fields, withdraw health-data consent, deactivate identifiers, export your data or delete your account in the rider workspace. Contacts independently approve notification and public-phone permissions. See the privacy notice for retention and deletion details."])
+            ]),
+        ("frequently-asked-questions", true) => new("Συχνές ερωτήσεις: QR κράνους, NFC και απόρρητο | ScanBack",
+            "Απαντήσεις για αυτοκόλλητα QR και NFC του ScanBack: συμβατά κινητά, σύνδεση στο διαδίκτυο, ειδοποιήσεις επαφών, χαμένα QR και έλεγχος ορατών στοιχείων.",
+            "Συχνές ερωτήσεις για αυτοκόλλητα QR και NFC του ScanBack", "Πρακτικές απαντήσεις πριν δημιουργήσετε προφίλ μοτοσικλετιστή ή μοιραστείτε σύνδεσμο έκτακτης ανάγκης.",
+            [
+                new("Χρειάζεται εφαρμογή σε εμένα ή σε όποιον βοηθά;", ["Το ScanBack λειτουργεί στον περιηγητή. Ο μοτοσικλετιστής χρειάζεται λογαριασμό για να διαχειρίζεται το προφίλ του, αλλά όποιος ανοίγει τη σελίδα ενός ενεργού αυτοκόλλητου δεν χρειάζεται λογαριασμό ScanBack. Το QR ανοίγει από κάμερα ή εφαρμογή ανάγνωσης QR. Το NFC απαιτεί συμβατό κινητό και ετικέτα που προετοιμάζεται ξεχωριστά."]),
+                new("Λειτουργεί το αυτοκόλλητο χωρίς διαδίκτυο;", ["Το αυτοκόλλητο περιέχει σύνδεσμο, όχι ιατρικό αρχείο εκτός σύνδεσης. Χρειάζεται σύνδεση στο διαδίκτυο για να φορτωθεί η τρέχουσα σελίδα. Προβλέψτε εναλλακτικό τρόπο επικοινωνίας με βασικές επαφές και μην καθυστερείτε επείγουσα κλήση προσπαθώντας να ανοίξετε τη σελίδα."]),
+                new("Το ScanBack εντοπίζει αυτόματα ατύχημα ή καλεί ασθενοφόρο;", ["Όχι. Η σάρωση δεν ανιχνεύει ατύχημα, δεν παρακολουθεί τον μοτοσικλετιστή και δεν πραγματοποιεί κλήση. Όποιος βοηθά πρέπει να υποβάλει συνειδητά αναφορά πιθανού ατυχήματος. Το ScanBack μπορεί στη συνέχεια να βάλει σε ουρά email προς επιβεβαιωμένες επαφές που δέχονται ειδοποιήσεις. Στην Ελλάδα καλέστε απευθείας 112 ή 166 για επείγουσα βοήθεια· η εφαρμογή δεν αποστέλλει διασώστες."]),
+                new("Μπορεί κάποιος να βρει τα ιατρικά μου στοιχεία στη Google;", ["Μόνο οι δημόσιες σελίδες παρουσίασης και οι οδηγοί προορίζονται για αναζήτηση. Οι σελίδες έκτακτης ανάγκης αποκλείονται από το sitemap και φέρουν οδηγίες noindex. Ο αποκλεισμός αναζήτησης δεν είναι κωδικός πρόσβασης: όποιος αποκτήσει ενεργό σύνδεσμο μπορεί να δει τα πεδία που επιλέγετε να δημοσιεύσετε. Ελέγχετε την προεπισκόπηση και μη μοιράζεστε περιττές πληροφορίες."]),
+                new("Τι γίνεται αν χαθεί ή αντιγραφεί το αυτοκόλλητο;", ["Απενεργοποιήστε το αντίστοιχο αναγνωριστικό στον πίνακα ελέγχου και δημιουργήστε άλλο. Ένα παλιό αντίγραφο δεν θα ανοίγει πλέον ενεργή σελίδα. Η ανάκληση δεν διαγράφει στιγμιότυπα ή πληροφορίες που έχουν ήδη αντιγραφεί. Η ενημέρωση του προφίλ αλλάζει τα στοιχεία πίσω από έναν ενεργό σύνδεσμο χωρίς νέα εκτύπωση."]),
+                new("Παραλαμβάνω έτοιμο αυτοκόλλητο ή ετικέτα NFC;", ["Το ScanBack παρέχει εικόνες QR για λήψη, φύλλο εκτύπωσης και τον σύνδεσμο έκτακτης ανάγκης. Η εκτύπωση, τα κατάλληλα υλικά για κράνη, η ετικέτα NFC και το εργαλείο εγγραφής παρέχονται ξεχωριστά. Ακολουθείτε τις οδηγίες του κατασκευαστή του κράνους και δοκιμάζετε το έτοιμο αυτοκόλλητο ή την ετικέτα πριν τη διαδρομή."]),
+                new("Μπορώ να αλλάξω γνώμη για την κοινοποίηση;", ["Ναι. Από τον χώρο εργασίας αλλάζετε την ορατότητα πεδίων, ανακαλείτε τη συγκατάθεση υγείας, απενεργοποιείτε αναγνωριστικά, εξάγετε δεδομένα ή διαγράφετε τον λογαριασμό. Κάθε επαφή εγκρίνει ξεχωριστά τις ειδοποιήσεις και τη δημοσίευση τηλεφώνου. Δείτε την πολιτική απορρήτου για λεπτομέρειες διατήρησης και διαγραφής."])
             ]),
         _ => throw new ArgumentOutOfRangeException(nameof(slug))
     };

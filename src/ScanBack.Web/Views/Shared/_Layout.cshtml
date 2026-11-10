@@ -75,6 +75,7 @@
         {
             <nav class="marketing-nav" aria-label="@T["Main navigation"]">
                 <a href="@(homeUrl + "/how-it-works")">@T["How it works"]</a>
+                <a href="@(homeUrl + "/frequently-asked-questions")">@(T.IsGreek ? "Συχνές ερωτήσεις" : "FAQ")</a>
                 <a href="@(homeUrl + "#privacy-first")">@T["Privacy first"]</a>
             </nav>
         }
@@ -146,8 +147,11 @@
         </main>
         <footer class="site-footer"><a class="footer-brand" href="@homeUrl">ScanBack</a><span>© @DateTime.UtcNow.Year</span><a href="/privacy">@T["Privacy & data"]</a><a href="@(homeUrl + "/qr-nfc-helmet-stickers")">QR &amp; NFC</a><a href="@(homeUrl + "/motorcycle-emergency-guide")">@(T.IsGreek ? "Οδηγός προετοιμασίας" : "Emergency preparation")</a><span class="footer-note">@T["Made for the road ahead."]</span></footer>
     }
-    <script src="~/vendor/bootstrap/bootstrap.bundle.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
+    @if (seo is null)
+    {
+        <script src="~/vendor/bootstrap/bootstrap.bundle.min.js" defer></script>
+        <script src="~/js/site.js" asp-append-version="true" defer></script>
+    }
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

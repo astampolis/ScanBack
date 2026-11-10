@@ -10,7 +10,7 @@ namespace ScanBack.Tests;
 [Collection(SqlWebCollection.Name)]
 public sealed class SeoTests(SqlWebFixture fixture)
 {
-    private static readonly string[] Slugs = ["", "how-it-works", "qr-nfc-helmet-stickers", "motorcycle-emergency-guide"];
+    private static readonly string[] Slugs = ["", "how-it-works", "qr-nfc-helmet-stickers", "motorcycle-emergency-guide", "frequently-asked-questions"];
 
     [Fact]
     public async Task Compression_is_limited_to_public_editorial_content_and_brand_assets_are_crawlable()
@@ -45,6 +45,8 @@ public sealed class SeoTests(SqlWebFixture fixture)
     [InlineData("el", "qr-nfc-helmet-stickers")]
     [InlineData("en", "motorcycle-emergency-guide")]
     [InlineData("el", "motorcycle-emergency-guide")]
+    [InlineData("en", "frequently-asked-questions")]
+    [InlineData("el", "frequently-asked-questions")]
     public async Task Public_pages_have_trusted_canonicals_reciprocal_languages_and_valid_structured_data(string language, string slug)
     {
         using var client = fixture.Client();
@@ -80,8 +82,24 @@ public sealed class SeoTests(SqlWebFixture fixture)
         var graph = json.RootElement.GetProperty("@graph").EnumerateArray().ToList();
         Assert.Contains(graph, item => item.GetProperty("@type").GetString() == "Organization");
         Assert.Contains(graph, item => item.GetProperty("@type").GetString() == "WebSite");
-        var breadcrumbs = Assert.Single(graph, item => item.GetProperty("@type").GetString() == "BreadcrumbList");
-        Assert.All(breadcrumbs.GetProperty("itemListElement").EnumerateArray(), item => Assert.Equal("ListItem", item.GetProperty("@type").GetString()));
+        var page = Assert.Single(graph, item => item.GetProperty("@type").GetString() == "WebPage");
+        Assert.Equal("http://localhost" + path, page.GetProperty("url").GetString());
+        Assert.Equal("http://localhost" + path + "#webpage", page.GetProperty("@id").GetString());
+        Assert.Equal(language, page.GetProperty("inLanguage").GetString());
+        Assert.Equal("http://localhost/#website", page.GetProperty("isPartOf").GetProperty("@id").GetString());
+        if (slug.Length == 0)
+        {
+            Assert.DoesNotContain(graph, item => item.GetProperty("@type").GetString() == "BreadcrumbList");
+        }
+        else
+        {
+            var breadcrumbs = Assert.Single(graph, item => item.GetProperty("@type").GetString() == "BreadcrumbList");
+            var items = breadcrumbs.GetProperty("itemListElement").EnumerateArray().ToList();
+            Assert.Equal(2, items.Count);
+            Assert.Equal(new[] { 1, 2 }, items.Select(item => item.GetProperty("position").GetInt32()));
+            Assert.Equal("http://localhost" + path, items[1].GetProperty("item").GetString());
+            Assert.Equal(breadcrumbs.GetProperty("@id").GetString(), page.GetProperty("breadcrumb").GetProperty("@id").GetString());
+        }
         Assert.DoesNotContain("untrusted-query-canary", structured.Groups[1].Value, StringComparison.Ordinal);
         var head = await client.SendAsync(new HttpRequestMessage(HttpMethod.Head, path));
         Assert.Equal(HttpStatusCode.OK, head.StatusCode);
@@ -89,7 +107,7 @@ public sealed class SeoTests(SqlWebFixture fixture)
     }
 
     [Fact]
-    public async Task Search_discovery_lists_exactly_eight_public_pages_and_excludes_personal_links()
+    public async Task Search_discovery_lists_exactly_ten_public_pages_and_excludes_personal_links()
     {
         var rider = await fixture.SeedRider(PublicFields.Name | PublicFields.Allergies);
         using var client = fixture.Client();
@@ -160,6 +178,70 @@ public sealed class SeoTests(SqlWebFixture fixture)
         var response = await client.GetAsync(source);
         Assert.Equal(HttpStatusCode.MovedPermanently, response.StatusCode);
         Assert.Equal(target, response.Headers.Location?.OriginalString);
+    }
+
+    [Theory]
+    [InlineData("/EN", "/en")]
+    [InlineData("/el/", "/el")]
+    [InlineData("/EN/HOW-IT-WORKS/", "/en/how-it-works")]
+    [InlineData("/el/FREQUENTLY-ASKED-QUESTIONS", "/el/frequently-asked-questions")]
+    public async Task Public_URL_variants_redirect_once_to_canonical_paths(string source, string target)
+    {
+        using var client = fixture.Client();
+        foreach (var method in new[] { HttpMethod.Get, HttpMethod.Head })
+        {
+            var response = await client.SendAsync(new HttpRequestMessage(method, source + "?utm_source=example"));
+            Assert.Equal(HttpStatusCode.PermanentRedirect, response.StatusCode);
+            Assert.Equal(target + "?utm_source=example", response.Headers.Location?.OriginalString);
+            Assert.Equal("noindex, nofollow", response.Headers.GetValues("X-Robots-Tag").Single());
+        }
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(target)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Editorial_normalization_does_not_rewrite_private_capability_or_account_paths()
+    {
+        var rider = await fixture.SeedRider(PublicFields.Name);
+        using var client = fixture.Client();
+        foreach (var path in new[] { "/E/" + rider.Token, "/ACCOUNT/LOGIN" })
+        {
+            var response = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Null(response.Headers.Location);
+            Assert.Equal("noindex, nofollow", response.Headers.GetValues("X-Robots-Tag").Single());
+            Assert.True(response.Headers.CacheControl?.NoStore);
+        }
+    }
+
+    [Fact]
+    public async Task Every_editorial_page_has_distinct_metadata_a_single_H1_and_no_unneeded_scripts()
+    {
+        using var client = fixture.Client();
+        var titles = new HashSet<string>();
+        var descriptions = new HashSet<string>();
+        foreach (var slug in Slugs)
+        foreach (var language in new[] { "en", "el" })
+        {
+            var path = PathFor(language, slug);
+            var html = await client.GetStringAsync(path);
+            Assert.Single(Tags(html, "h1"));
+            Assert.True(titles.Add(WebUtility.HtmlDecode(Assert.Single(Regex.Matches(html, "<title>(.*?)</title>")).Groups[1].Value)));
+            Assert.True(descriptions.Add(Assert.Single(Tags(html, "meta"), item => item.GetValueOrDefault("name") == "description")["content"]));
+            Assert.DoesNotContain(Tags(html, "script"), script => script.ContainsKey("src"));
+            // JSON-LD describes the real site and page, without invented review or product offers.
+            Assert.DoesNotContain("aggregateRating", html, StringComparison.Ordinal);
+            Assert.DoesNotContain("FAQPage", html, StringComparison.Ordinal);
+            if (slug.Length > 0)
+            {
+                var sections = Tags(html, "section").Where(section => section.GetValueOrDefault("id")?.StartsWith("section-", StringComparison.Ordinal) == true).ToList();
+                Assert.NotEmpty(sections);
+                var anchors = Tags(html, "a").Select(link => link.GetValueOrDefault("href")).ToList();
+                Assert.All(sections, section => Assert.Contains("#" + section["id"], anchors));
+            }
+        }
+        var missing = await client.GetAsync("/en/nonexistent-page");
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        Assert.Equal("noindex, nofollow", missing.Headers.GetValues("X-Robots-Tag").Single());
     }
 
     private static string PathFor(string language, string slug) => "/" + language + (slug.Length == 0 ? "" : "/" + slug);
