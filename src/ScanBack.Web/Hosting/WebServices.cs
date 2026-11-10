@@ -84,6 +84,7 @@ public static class WebServices
             o.RequestCultureProviders = [new CookieRequestCultureProvider()];
         });
         services.AddSingleton<SiteLinks>();
+        services.AddScoped<IncidentSession>();
         services.AddTransient<UiText>();
         services.AddExceptionHandler<SafeExceptionHandler>();
         services.AddHsts(o => { o.MaxAge = TimeSpan.FromDays(365); o.IncludeSubDomains = false; });
@@ -91,6 +92,8 @@ public static class WebServices
         services.AddRateLimiter(options =>
         {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddPolicy("chat", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions { PermitLimit = 60, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
             options.AddPolicy("reports", context => RateLimitPartition.GetFixedWindowLimiter(context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions { PermitLimit = 6, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
             options.AddPolicy("authentication", context => HttpMethods.IsGet(context.Request.Method)

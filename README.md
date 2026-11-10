@@ -12,11 +12,12 @@ The sticker stores an HTTPS URL, never medical information. Anyone with a copy o
 - Multiple QR/NFC identifiers (up to ten), labels, activation/deactivation, permanent replacement, SVG/PNG downloads, and printable sticker sheets.
 - Anonymous emergency pages, prominent 112/166 dialing, and Greek/English safety reminders.
 - Explicit possible-accident reporting, optional permission-based GPS, manual landmarks, duplicate suppression, notification cooldowns, and per-source limits.
+- Restricted live incident chat with durable protected messages, automatic three-second updates, per-request access checks, retry deduplication, send limits and incident retention.
 - Incident-specific reporter sessions and separate expiring, single-use contact invitations, restricted location access, Google Maps links, email delivery status, and a rule-based dispatcher script.
 - Persistent notification outbox with encrypted message bodies, SMTP with verified TLS for remote providers, bounded retries, and automatic incident/outbox/audit cleanup.
 - MFA-protected administration of account/identifier status, limited incident metadata, delivery configuration, retention, and technical audit events. Administrators do not get medical-profile access.
 
-Optional SignalR chat, SMS, external AI, payments, physical sticker fulfilment, and extended incident reporting are **not part of this mandatory MVP**. No external AI receives health data.
+Optional SMS, external AI, payments, physical sticker fulfilment, and extended incident reporting are **not part of this mandatory MVP**. No external AI receives health data.
 
 ## Local development
 

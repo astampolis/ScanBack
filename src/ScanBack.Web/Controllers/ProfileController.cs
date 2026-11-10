@@ -190,6 +190,8 @@ public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUs
         var consents = await db.ConsentRecords.AsNoTracking().Where(x => x.UserId == UserId).Select(x => new { x.PolicyVersion, x.ConsentText, x.Action, x.CreatedAt }).ToListAsync();
         var accesses = await db.IncidentAccesses.AsNoTracking().Where(x => x.Incident.RiderProfileId == profileId)
             .Select(x => new { x.Id, x.IncidentId, x.EmergencyContactId, x.Role, x.ExpiresAt, x.IsRevoked, x.InvitationConsumedAt }).ToListAsync();
+        var chat = await db.IncidentChatMessages.AsNoTracking().Where(x => x.Incident.RiderProfileId == profileId)
+            .OrderBy(x => x.Id).Select(x => new { x.IncidentId, x.SenderRole, x.Body, x.SentAt }).ToListAsync();
         var notifications = await db.OutboxMessages.AsNoTracking().Where(x => (profileId != null && x.RiderProfileId == profileId) || (x.IncidentId != null && db.Incidents.Any(i => i.Id == x.IncidentId && i.RiderProfileId == profileId)) || (x.EmergencyContactId != null && db.EmergencyContacts.Any(c => c.Id == x.EmergencyContactId && c.RiderProfileId == profileId)))
             .Select(x => new { x.Id, x.RiderProfileId, x.IncidentId, x.EmergencyContactId, x.ToEmail, x.Subject, x.Kind, x.CreatedAt, x.NextAttemptAt, x.AcceptedAt, x.Attempts, x.LastError }).ToListAsync();
         var audit = await db.AuditEvents.AsNoTracking().Where(x => x.ActorId == UserId).OrderBy(x => x.CreatedAt)
@@ -200,7 +202,7 @@ public sealed class ProfileController(AppDbContext db, UserManager<ApplicationUs
         {
             ExportedAt = DateTimeOffset.UtcNow, Account = new { user.Id, user.UserName, user.Email, user.EmailConfirmed, user.PhoneNumber, user.PhoneNumberConfirmed, user.TwoFactorEnabled, user.LockoutEnabled, user.LockoutEnd, user.AccessFailedCount, user.IsActive },
             Profile = profile is null ? null : new { profile.Id, profile.FullName, profile.DateOfBirth, profile.BloodType, profile.Allergies, profile.Conditions, profile.Medications, profile.OtherInformation, profile.Instructions, PublicFields = profile.PublicFields.ToString(), profile.HealthConsent, profile.ConsentAt, profile.ConsentPolicyVersion, profile.UpdatedAt },
-            Photo = new { FileName = profile?.PhotoFileName, Base64 = photo }, Contacts = contacts, Stickers = identifiers, Incidents = incidents, IncidentAccess = accesses, Notifications = notifications, ConsentRecords = consents, Audit = audit
+            Photo = new { FileName = profile?.PhotoFileName, Base64 = photo }, Contacts = contacts, Stickers = identifiers, Incidents = incidents, IncidentAccess = accesses, ChatMessages = chat, Notifications = notifications, ConsentRecords = consents, Audit = audit
         };
         db.AuditEvents.Add(new AuditEvent { ActorId = UserId, Action = "PersonalDataExported", EntityId = profileId?.ToString() });
         await db.SaveChangesAsync();

@@ -13,7 +13,7 @@ using ScanBack.Web.Services;
 namespace ScanBack.Web.Controllers;
 
 [AllowAnonymous]
-public sealed class EmergencyController(AppDbContext db, TokenService tokens, SiteLinks links, UiText text) : Controller
+public sealed class EmergencyController(AppDbContext db, TokenService tokens, SiteLinks links, UiText text, IncidentSession sessions) : Controller
 {
     [HttpGet("/e/{token}")]
     public async Task<IActionResult> Index(string token)
@@ -207,30 +207,9 @@ public sealed class EmergencyController(AppDbContext db, TokenService tokens, Si
     private IQueryable<IncidentAccess> AccessQuery() => db.IncidentAccesses.AsNoTracking()
         .Include(a => a.Incident).ThenInclude(i => i.EmergencyIdentifier).ThenInclude(i => i.RiderProfile).ThenInclude(p => p.Contacts);
 
-    private async Task<IncidentAccess?> GetAccess(Guid incidentId)
-    {
-        if (!Request.Cookies.TryGetValue(CookieName(incidentId), out var protectedValue)) return null;
-        string value;
-        try { value = tokens.Unprotect(protectedValue); }
-        catch (Exception exception) when (exception is CryptographicException or FormatException or ArgumentException) { return null; }
-        var parts = value.Split('|');
-        if (parts.Length != 3 || parts[0] != "incident" || !Guid.TryParse(parts[1], out var grantId) || !ValidToken(parts[2])) return null;
-        var hash = TokenService.Hash(parts[2]);
-        var access = await AccessQuery().FirstOrDefaultAsync(a => a.Id == grantId && a.IncidentId == incidentId
-            && (a.SessionTokenHash == hash || (a.Role == "Reporter" && a.SessionTokenHash == null && a.TokenHash == hash)));
-        return await AccessIsValid(access) ? access : null;
-    }
+    private Task<IncidentAccess?> GetAccess(Guid incidentId) => sessions.GetAsync(HttpContext, incidentId);
 
-    private async Task<bool> AccessIsValid(IncidentAccess? access)
-    {
-        if (access is null || access.IsRevoked || access.ExpiresAt <= DateTimeOffset.UtcNow) return false;
-        var incident = access.Incident;
-        if (incident.RiderProfileId != incident.EmergencyIdentifier.RiderProfileId) return false;
-        if (incident.IsClosed || incident.ExpiresAt <= DateTimeOffset.UtcNow || !incident.EmergencyIdentifier.IsActive || incident.EmergencyIdentifier.IsAdminBlocked || incident.EmergencyIdentifier.RevokedAt is not null) return false;
-        if (!await db.Users.AnyAsync(u => u.Id == incident.EmergencyIdentifier.RiderProfile.UserId && u.IsActive)) return false;
-        return access.Role == "Reporter" || (access.Role == "Contact" && access.EmergencyContactId is Guid contactId
-            && await db.EmergencyContacts.AnyAsync(c => c.Id == contactId && c.RiderProfileId == incident.RiderProfileId && c.IsVerified && c.NotifyEnabled));
-    }
+    private Task<bool> AccessIsValid(IncidentAccess? access) => sessions.IsValidAsync(access);
 
     private void SetAccessCookie(IncidentAccess access, string token) => Response.Cookies.Append(CookieName(access.IncidentId), tokens.Protect($"incident|{access.Id}|{token}"), new CookieOptions
     {

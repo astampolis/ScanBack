@@ -98,6 +98,19 @@ public sealed class IncidentAccess
     public bool IsRevoked { get; set; }
 }
 
+public sealed class IncidentChatMessage
+{
+    public long Id { get; set; }
+    public Guid IncidentId { get; set; }
+    public Incident Incident { get; set; } = null!;
+    // Keep no contact names, email addresses or capability tokens in chat metadata.
+    public Guid SenderAccessId { get; set; }
+    public string SenderRole { get; set; } = "";
+    public Guid ClientMessageId { get; set; }
+    public string Body { get; set; } = "";
+    public DateTimeOffset SentAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class OutboxMessage
 {
     public Guid Id { get; set; } = Guid.NewGuid();
